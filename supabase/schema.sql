@@ -81,12 +81,21 @@ create table if not exists employee_adjustments (
   check (end_datetime > start_datetime)
 );
 
+-- 6. Jours fériés
+create table if not exists public_holidays (
+  id uuid primary key default gen_random_uuid(),
+  date date not null unique,
+  label text not null,
+  created_at timestamptz not null default now()
+);
+
 -- ─── Index ────────────────────────────────────────────────────────────────────
 create index if not exists idx_schedule_employee on employee_work_schedule(employee_id);
 create index if not exists idx_exclusions_employee on employee_exclusions(employee_id);
 create index if not exists idx_exclusions_dates on employee_exclusions(start_datetime, end_datetime);
 create index if not exists idx_adjustments_employee on employee_adjustments(employee_id);
 create index if not exists idx_adjustments_dates on employee_adjustments(start_datetime, end_datetime);
+create index if not exists idx_holidays_date on public_holidays(date);
 
 -- ─── updated_at trigger ───────────────────────────────────────────────────────
 create or replace function set_updated_at()

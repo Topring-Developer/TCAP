@@ -31,6 +31,7 @@ export default function CapacityPage() {
   const [schedules, setSchedules] = useState<EmployeeWorkSchedule[]>([]);
   const [exclusions, setExclusions] = useState<EmployeeExclusionWithType[]>([]);
   const [adjustments, setAdjustments] = useState<EmployeeAdjustment[]>([]);
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [tooltip, setTooltip] = useState<{ empId: string; dateStr: string } | null>(null);
 
@@ -43,7 +44,7 @@ export default function CapacityPage() {
     const start = weekDays[0].toISOString();
     const end = addDays(weekDays[6], 1).toISOString();
 
-    const [{ data: emps }, { data: scheds }, { data: excs }, { data: adjs }] = await Promise.all([
+    const [{ data: emps }, { data: scheds }, { data: excs }, { data: adjs }, { data: hols }] = await Promise.all([
       supabase.from("employees").select("*").eq("is_active", true).order("full_name"),
       supabase.from("employee_work_schedule").select("*"),
       supabase
@@ -56,12 +57,21 @@ export default function CapacityPage() {
         .select("*, employees(id, full_name)")
         .lt("start_datetime", end)
         .gt("end_datetime", start),
+      supabase
+        .from("public_holidays")
+        .select("date, label")
+        .gte("date", formatDate(weekDays[0]))
+        .lte("date", formatDate(weekDays[6])),
     ]);
 
     setEmployees(emps ?? []);
     setSchedules(scheds ?? []);
     setExclusions((excs as EmployeeExclusionWithType[]) ?? []);
     setAdjustments((adjs as EmployeeAdjustment[]) ?? []);
+    // Construire un dictionnaire date → label
+    const holMap: Record<string, string> = {};
+    for (const h of (hols ?? [])) holMap[h.date] = h.label;
+    setHolidays(holMap);
     setLoading(false);
   }, [weekStartStr]);
 
@@ -140,27 +150,36 @@ export default function CapacityPage() {
                   const dateStr = formatDate(day);
                   const isToday = dateStr === today;
                   const isWeekend = i >= 5;
+                  const holidayLabel = holidays[dateStr];
                   return (
                     <th
                       key={dateStr}
                       className={cn(
                         "px-3 py-3 text-center border-r border-slate-100 min-w-[130px]",
                         isWeekend ? "bg-slate-50" : "bg-white",
-                        isToday && "bg-blue-50"
+                        isToday && "bg-blue-50",
+                        holidayLabel && "bg-amber-50"
                       )}
                     >
                       <div className={cn(
                         "font-semibold text-sm",
-                        isToday ? "text-blue-700" : isWeekend ? "text-slate-400" : "text-slate-700"
+                        isToday ? "text-blue-700" : isWeekend ? "text-slate-400" : "text-slate-700",
+                        holidayLabel && "text-amber-700"
                       )}>
                         {DAY_LABELS_FULL[i]}
                       </div>
                       <div className={cn(
                         "text-xs mt-0.5",
-                        isToday ? "text-blue-500" : "text-slate-400"
+                        isToday ? "text-blue-500" : "text-slate-400",
+                        holidayLabel && "text-amber-500"
                       )}>
                         {format(day, "d MMM", { locale: fr })}
                       </div>
+                      {holidayLabel && (
+                        <div className="text-xs mt-0.5 text-amber-600 font-medium truncate max-w-[120px] mx-auto">
+                          🏖 {holidayLabel}
+                        </div>
+                      )}
                     </th>
                   );
                 })}
