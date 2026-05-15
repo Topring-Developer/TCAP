@@ -39,7 +39,10 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: emps }, { data: scheds }, { data: excs }, { data: adjs }] = await Promise.all([
-      supabase.from("employees").select("*").eq("is_active", true).order("full_name"),
+      // Inclure employés actifs + désactivés après le début de la plage analysée
+      supabase.from("employees").select("*")
+        .or(`is_active.eq.true,deactivated_at.gte.${rangeStart.toISOString()}`)
+        .order("full_name"),
       supabase.from("employee_work_schedule").select("*"),
       supabase
         .from("employee_exclusions")

@@ -45,7 +45,11 @@ export default function CapacityPage() {
     const end = addDays(weekDays[6], 1).toISOString();
 
     const [{ data: emps }, { data: scheds }, { data: excs }, { data: adjs }, { data: hols }] = await Promise.all([
-      supabase.from("employees").select("*").eq("is_active", true).order("full_name"),
+      // Inclure les employés actifs ET ceux désactivés APRÈS le début de la semaine consultée
+      // → les semaines passées restent visibles dans l'historique
+      supabase.from("employees").select("*")
+        .or(`is_active.eq.true,deactivated_at.gte.${start}`)
+        .order("full_name"),
       supabase.from("employee_work_schedule").select("*"),
       supabase
         .from("employee_exclusions")

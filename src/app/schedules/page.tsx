@@ -33,7 +33,7 @@ export default function SchedulesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: emps }, { data: scheds }] = await Promise.all([
-      supabase.from("employees").select("*").eq("is_active", true).order("full_name"),
+      supabase.from("employees").select("*").eq("is_active", true).order("full_name"), // Horaires: actifs seulement
       supabase.from("employee_work_schedule").select("*"),
     ]);
 

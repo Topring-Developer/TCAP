@@ -1,24 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, UserCheck, UserX } from "lucide-react";
+import { Plus, Pencil, UserCheck, UserX, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Employee, EmployeeInsert } from "@/lib/supabase/types";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { formatDateFr } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+
+type ModalMode = "create" | "edit" | "deactivate";
 
 export default function EmployeesPage() {
   const supabase = createClient();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<ModalMode>("create");
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
   const [form, setForm] = useState({ full_name: "" });
+  const [deactivateDate, setDeactivateDate] = useState("");
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState<"all" | "active" | "inactive">("active");
+  const [filter, setFilter] = useState<"active" | "inactive" | "all">("active");
 
   async function load() {
     setLoading(true);
@@ -33,21 +38,30 @@ export default function EmployeesPage() {
   useEffect(() => { load(); }, []);
 
   function openCreate() {
+    setModalMode("create");
     setEditTarget(null);
     setForm({ full_name: "" });
     setModalOpen(true);
   }
 
   function openEdit(emp: Employee) {
+    setModalMode("edit");
     setEditTarget(emp);
     setForm({ full_name: emp.full_name });
+    setModalOpen(true);
+  }
+
+  function openDeactivate(emp: Employee) {
+    setModalMode("deactivate");
+    setEditTarget(emp);
+    setDeactivateDate(new Date().toISOString().slice(0, 10));
     setModalOpen(true);
   }
 
   async function handleSave() {
     if (!form.full_name.trim()) return;
     setSaving(true);
-    if (editTarget) {
+    if (modalMode === "edit" && editTarget) {
       await supabase.from("employees").update({ full_name: form.full_name.trim() }).eq("id", editTarget.id);
     } else {
       const insert: EmployeeInsert = { full_name: form.full_name.trim(), is_active: true };
@@ -58,8 +72,23 @@ export default function EmployeesPage() {
     load();
   }
 
-  async function toggleActive(emp: Employee) {
-    await supabase.from("employees").update({ is_active: !emp.is_active }).eq("id", emp.id);
+  async function handleDeactivate() {
+    if (!editTarget || !deactivateDate) return;
+    setSaving(true);
+    await supabase.from("employees").update({
+      is_active: false,
+      deactivated_at: new Date(deactivateDate + "T23:59:59").toISOString(),
+    }).eq("id", editTarget.id);
+    setSaving(false);
+    setModalOpen(false);
+    load();
+  }
+
+  async function handleReactivate(emp: Employee) {
+    await supabase.from("employees").update({
+      is_active: true,
+      deactivated_at: null,
+    }).eq("id", emp.id);
     load();
   }
 
@@ -69,11 +98,14 @@ export default function EmployeesPage() {
     return true;
   });
 
+  const activeCount = employees.filter((e) => e.is_active).length;
+  const inactiveCount = employees.filter((e) => !e.is_active).length;
+
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <PageHeader
         title="Employés"
-        subtitle={`${employees.filter((e) => e.is_active).length} actifs · ${employees.filter((e) => !e.is_active).length} inactifs`}
+        subtitle={`${activeCount} actifs · ${inactiveCount} inactifs`}
         actions={
           <Button onClick={openCreate}>
             <Plus className="w-4 h-4" /> Ajouter
@@ -94,7 +126,7 @@ export default function EmployeesPage() {
                 : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
             )}
           >
-            {f === "active" ? "Actifs" : f === "inactive" ? "Inactifs" : "Tous"}
+            {f === "active" ? `Actifs (${activeCount})` : f === "inactive" ? `Inactifs (${inactiveCount})` : "Tous"}
           </button>
         ))}
       </div>
@@ -120,35 +152,50 @@ export default function EmployeesPage() {
                     {emp.full_name}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {emp.is_active ? "Actif" : "Inactif"}
+                    {emp.is_active
+                      ? "Actif"
+                      : emp.deactivated_at
+                        ? `Désactivé le ${formatDateFr(emp.deactivated_at)}`
+                        : "Inactif"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => openEdit(emp)}>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => openEdit(emp)} title="Modifier le nom">
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleActive(emp)}
-                  title={emp.is_active ? "Désactiver" : "Activer"}
-                >
-                  {emp.is_active
-                    ? <UserX className="w-3.5 h-3.5 text-slate-400" />
-                    : <UserCheck className="w-3.5 h-3.5 text-green-500" />}
-                </Button>
+                {emp.is_active ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openDeactivate(emp)}
+                    title="Désactiver avec date"
+                    className="text-slate-400 hover:text-orange-600 hover:bg-orange-50"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleReactivate(emp)}
+                    title="Réactiver"
+                    className="text-green-500 hover:bg-green-50"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal créer / modifier nom */}
       <Modal
-        open={modalOpen}
+        open={modalOpen && (modalMode === "create" || modalMode === "edit")}
         onClose={() => setModalOpen(false)}
-        title={editTarget ? "Modifier l'employé" : "Ajouter un employé"}
+        title={modalMode === "edit" ? "Modifier l'employé" : "Ajouter un employé"}
         size="sm"
       >
         <div className="space-y-4">
@@ -164,6 +211,38 @@ export default function EmployeesPage() {
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
             <Button onClick={handleSave} disabled={saving || !form.full_name.trim()}>
               {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal désactivation avec date */}
+      <Modal
+        open={modalOpen && modalMode === "deactivate"}
+        onClose={() => setModalOpen(false)}
+        title="Désactiver l'employé"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            <p className="font-medium mb-1">{editTarget?.full_name}</p>
+            <p>L'employé disparaîtra de la vue semaine et des projections à partir de cette date. Les semaines passées resteront visibles dans l'historique.</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4" /> Date de désactivation
+            </label>
+            <input
+              type="date"
+              value={deactivateDate}
+              onChange={(e) => setDeactivateDate(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
+            <Button variant="danger" onClick={handleDeactivate} disabled={saving || !deactivateDate}>
+              {saving ? "Enregistrement…" : "Désactiver"}
             </Button>
           </div>
         </div>
