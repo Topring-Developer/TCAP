@@ -36,12 +36,16 @@ export interface Employee {
   id: string;
   full_name: string;
   is_active: boolean;
+  employment_type: "full_time" | "part_time";
   deactivated_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type EmployeeInsert = Omit<Employee, "id" | "created_at" | "updated_at" | "deactivated_at"> & { deactivated_at?: string | null };
+export type EmployeeInsert = Omit<Employee, "id" | "created_at" | "updated_at" | "deactivated_at" | "employment_type"> & {
+  deactivated_at?: string | null;
+  employment_type?: "full_time" | "part_time";
+};
 export type EmployeeUpdate = Partial<EmployeeInsert>;
 
 export interface EmployeeWorkSchedule {

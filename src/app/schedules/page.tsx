@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Save, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Employee, EmployeeWorkSchedule } from "@/lib/supabase/types";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -105,11 +105,33 @@ export default function SchedulesPage() {
       <PageHeader
         title="Horaires normaux"
         subtitle="Définissez les blocs AM et PM pour chaque employé, du lundi au vendredi"
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const allOpen: Record<string, boolean> = {};
+                employees.forEach((e) => { allOpen[e.id] = true; });
+                setExpanded(allOpen);
+              }}
+            >
+              <ChevronsUpDown className="w-3.5 h-3.5" /> Tout ouvrir
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setExpanded({})}
+            >
+              <ChevronsDownUp className="w-3.5 h-3.5" /> Tout fermer
+            </Button>
+          </div>
+        }
       />
 
       <div className="space-y-3">
         {employees.map((emp) => {
-          const isExpanded = expanded[emp.id] ?? true;
+          const isExpanded = expanded[emp.id] ?? false;
           return (
             <div key={emp.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               {/* En-tête employé */}
