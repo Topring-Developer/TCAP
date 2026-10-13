@@ -108,7 +108,7 @@ export default function MappingTasksPage() {
         {["all", "unmapped", "Picking", "Expédition", "Réception", "Production", "Inventaire", "Support"].map((d) => (
           <button key={d} onClick={() => setFilterDept(d)}
             className={cn("px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              filterDept === d ? "bg-blue-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50")}>
+              filterDept === d ? "bg-primary text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50")}>
             {d === "all" ? "Tous" : d === "unmapped" ? `Non mappées (${unmappedCount})` : d}
           </button>
         ))}
@@ -152,7 +152,7 @@ export default function MappingTasksPage() {
           <div>
             <label className="text-sm font-medium text-slate-700 block mb-1">Département KPI</label>
             <select value={form.kpi_department ?? ""} onChange={(e) => setForm((p) => ({ ...p, kpi_department: e.target.value || null }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary">
               <option value="">— Aucun / Non mappé —</option>
               {DEPARTMENTS.filter(Boolean).map((d) => <option key={d!} value={d!}>{d}</option>)}
             </select>
@@ -168,7 +168,7 @@ export default function MappingTasksPage() {
                 <label key={key} className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form[key as keyof typeof form] as boolean}
                     onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.checked }))}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary" />
                   <span className="text-sm text-slate-700">{label}</span>
                 </label>
               ))}

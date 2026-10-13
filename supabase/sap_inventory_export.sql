@@ -1,0 +1,13 @@
+-- Requête SAP recommandée pour l'export inventaire cyclique (Matthieu / ERP)
+-- Exporter le résultat en CSV ou Excel, puis importer via TCAP → Import inventaire
+--
+-- SELECT A."ID"
+-- , A."USER_ID"
+-- , TO_VARCHAR(A."TS",'yyyy-MM-dd') AS "Date"
+-- , B."U_NAME"
+-- , A."ITEMCODE"
+-- , A."LOCATION"
+-- , A."RESULT"
+-- FROM "TOP_INVENTAIRE_CYCLIQUE" A
+-- LEFT JOIN OUSR B ON A."USER_ID" = B."USER_CODE"
+-- WHERE A."TS" >= '2026-04-01' AND A."TS" < '2026-07-01';

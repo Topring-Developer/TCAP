@@ -186,7 +186,7 @@ export default function SchedulesPage() {
                                   onChange={(e) => updateDraft(emp.id, day, field, e.target.value)}
                                   className={cn(
                                     "w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-center",
-                                    "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
+                                    "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
                                     "bg-slate-50 hover:bg-white transition-colors"
                                   )}
                                 />

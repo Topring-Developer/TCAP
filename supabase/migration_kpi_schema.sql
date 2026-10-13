@@ -170,10 +170,15 @@ create index if not exists idx_prod_std_item         on production_standards(ite
 create index if not exists idx_mapping_system        on employee_system_mapping(system_name, external_employee_name);
 
 -- ─── updated_at triggers ──────────────────────────────────────
+drop trigger if exists esm_updated_at on employee_system_mapping;
 create trigger esm_updated_at before update on employee_system_mapping
   for each row execute function set_updated_at();
+
+drop trigger if exists tm_updated_at on task_mapping;
 create trigger tm_updated_at before update on task_mapping
   for each row execute function set_updated_at();
+
+drop trigger if exists ps_updated_at on production_standards;
 create trigger ps_updated_at before update on production_standards
   for each row execute function set_updated_at();
 

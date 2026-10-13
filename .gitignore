@@ -33,3 +33,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# données d'import locales (xlsx/csv métier)
+/Import/
+
+# export de migration déjà intégré dans src/
+/twms-export/
+
+# preview design local
+preview-palette-toprings.html

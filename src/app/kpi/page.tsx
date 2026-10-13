@@ -1,141 +1,276 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar, BarChart3, TrendingUp, TrendingDown, Minus, AlertCircle } from "lucide-react";
-import { addWeeks, subWeeks, format, startOfWeek } from "date-fns";
-import { fr } from "date-fns/locale";
-import { Button } from "@/components/ui/Button";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { WarehouseTeamCards } from "@/components/kpi/WarehouseTeamCards";
 import { cn } from "@/lib/utils";
+import type { PickingWaveRow } from "@/lib/picking";
+import {
+  computeWarehouseTeam,
+  priorAvailableMonths,
+  rollingBenchmark,
+  type WarehouseTeamSummary,
+} from "@/lib/warehouse";
+import { fetchAllRows } from "@/lib/supabase/fetchAll";
+import { computeProductionSummary, formatMinutes, formatPct } from "@/lib/production";
+import { fetchWarehouseMonth } from "@/lib/warehouseData";
+import { fetchSapDataSource, last12MonthKeys } from "@/lib/sap/source";
 
-type KpiCard = {
-  department: string;
-  unit: string;
-  current: number | null;
-  previous: number | null;
-  color: string;
-  href: string;
+const MONTH_LABELS: Record<string, string> = {
+  "01": "Janvier", "02": "Février", "03": "Mars", "04": "Avril",
+  "05": "Mai", "06": "Juin", "07": "Juillet", "08": "Août",
+  "09": "Septembre", "10": "Octobre", "11": "Novembre", "12": "Décembre",
 };
 
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split("-");
+  return `${MONTH_LABELS[m ?? ""] ?? m} ${y}`;
+}
+
+function shortMonth(ym: string): string {
+  const [y, m] = ym.split("-");
+  const names: Record<string, string> = {
+    "01": "Jan", "02": "Fév", "03": "Mar", "04": "Avr",
+    "05": "Mai", "06": "Jun", "07": "Jul", "08": "Aoû",
+    "09": "Sep", "10": "Oct", "11": "Nov", "12": "Déc",
+  };
+  return `${names[m ?? ""] ?? m} ${String(y).slice(2)}`;
+}
+
+function formatRate(v: number | null): string {
+  if (v == null) return "—";
+  return v.toFixed(1);
+}
+
+type Snapshot = { ym: string; team: WarehouseTeamSummary; waveRows: PickingWaveRow[] };
+
 export default function KpiDashboardPage() {
-  const [weekStart, setWeekStart] = useState<Date>(() =>
-    startOfWeek(new Date(), { weekStartsOn: 1 })
-  );
+  const supabase = createClient();
+  const [months, setMonths] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [prodVariance, setProdVariance] = useState<number | null>(null);
+  const [prodActual, setProdActual] = useState<number | null>(null);
 
-  const weekLabel = `Semaine du ${format(weekStart, "d MMM yyyy", { locale: fr })}`;
+  const loadMonths = useCallback(async () => {
+    const source = await fetchSapDataSource();
+    if (source === "wrapper") {
+      const unique = last12MonthKeys();
+      setMonths(unique);
+      setSelectedMonth((cur) => cur || unique[0] || "");
+      return;
+    }
+    const [{ data: pick }, { data: pack }] = await Promise.all([
+      supabase.from("picking_daily_counts").select("period_month").order("period_month", { ascending: false }).limit(24),
+      supabase.from("packaging_daily_counts").select("period_month").order("period_month", { ascending: false }).limit(24),
+    ]);
+    const unique = [...new Set([
+      ...(pick ?? []).map((r) => r.period_month),
+      ...(pack ?? []).map((r) => r.period_month),
+    ])].sort().reverse();
+    setMonths(unique);
+    setSelectedMonth((cur) => cur || unique[0] || "");
+  }, []);
 
-  function variationPct(current: number | null, previous: number | null): number | null {
-    if (!current || !previous || previous === 0) return null;
-    return Math.round(((current - previous) / previous) * 1000) / 10;
-  }
+  const loadTrend = useCallback(async () => {
+    if (months.length === 0) return;
+    setLoading(true);
+    const trendMonths = [...months].slice(0, 8).reverse();
+    const rows = await Promise.all(
+      trendMonths.map(async (ym) => {
+        const d = await fetchWarehouseMonth(supabase, ym);
+        return {
+          ym,
+          team: computeWarehouseTeam(d.pickRows, d.packRows, d.pickLogs, d.expLogs, d.waveRows, ym),
+          waveRows: d.waveRows,
+        };
+      })
+    );
+    setSnapshots(rows);
+    setLoading(false);
+  }, [months]);
 
-  // Données placeholder — seront remplacées par les vraies requêtes Supabase
-  const kpis: KpiCard[] = [
-    { department: "Picking",    unit: "lignes/h", current: null, previous: null, color: "blue",   href: "/kpi/department?dept=Picking" },
-    { department: "Expédition", unit: "lignes/h", current: null, previous: null, color: "green",  href: "/kpi/department?dept=Expédition" },
-    { department: "Réception",  unit: "lignes/h", current: null, previous: null, color: "orange", href: "/kpi/department?dept=Réception" },
-    { department: "Production", unit: "% standard", current: null, previous: null, color: "purple", href: "/kpi/department?dept=Production" },
-  ];
+  useEffect(() => { loadMonths(); }, [loadMonths]);
+  useEffect(() => { loadTrend(); }, [loadTrend]);
 
-  const colorMap: Record<string, string> = {
-    blue:   "border-blue-200 bg-blue-50",
-    green:  "border-green-200 bg-green-50",
-    orange: "border-orange-200 bg-orange-50",
-    purple: "border-purple-200 bg-purple-50",
-  };
-  const iconColorMap: Record<string, string> = {
-    blue: "text-blue-600", green: "text-green-600", orange: "text-orange-600", purple: "text-purple-600",
-  };
+  useEffect(() => {
+    if (!selectedMonth) return;
+    let cancelled = false;
+    fetchAllRows<{ actual_minutes: number; target_minutes: number | null; included_in_kpi: boolean; exclusion_reason: string | null }>(
+      (from, to) =>
+        supabase
+          .from("production_actuals")
+          .select("actual_minutes, target_minutes, included_in_kpi, exclusion_reason")
+          .eq("period_month", selectedMonth)
+          .range(from, to)
+    ).then(({ data }) => {
+      if (cancelled) return;
+      const summary = computeProductionSummary(data);
+      setProdActual(summary.includedLines > 0 ? summary.actualMinutes : null);
+      setProdVariance(summary.targetMinutes > 0 ? summary.variancePct : null);
+    });
+    return () => { cancelled = true; };
+  }, [selectedMonth]);
+
+  const current = snapshots.find((s) => s.ym === selectedMonth)?.team ?? null;
+  const previous = useMemo(() => {
+    if (!selectedMonth) return null;
+    const priors = priorAvailableMonths(selectedMonth, snapshots.map((s) => s.ym), 1);
+    return snapshots.find((s) => s.ym === priors[0])?.team ?? null;
+  }, [selectedMonth, snapshots]);
+
+  const rolling = useMemo(() => {
+    if (!selectedMonth) return null;
+    const priors = priorAvailableMonths(selectedMonth, snapshots.map((s) => s.ym), 3);
+    const teams = priors
+      .map((ym) => snapshots.find((s) => s.ym === ym)?.team)
+      .filter((t): t is WarehouseTeamSummary => t != null);
+    return rollingBenchmark(teams);
+  }, [selectedMonth, snapshots]);
+
+  const previousRolling = useMemo(() => {
+    if (!selectedMonth) return null;
+    const prev = priorAvailableMonths(selectedMonth, snapshots.map((s) => s.ym), 1)[0];
+    if (!prev) return null;
+    const priors = priorAvailableMonths(prev, snapshots.map((s) => s.ym), 3);
+    const teams = priors
+      .map((ym) => snapshots.find((s) => s.ym === ym)?.team)
+      .filter((t): t is WarehouseTeamSummary => t != null);
+    return rollingBenchmark(teams);
+  }, [selectedMonth, snapshots]);
+
+  const maxLines = Math.max(1, ...snapshots.map((s) => s.team.totalLines));
+  const rates = snapshots.map((s) => s.team.teamPickLinesPerHour).filter((r): r is number => r != null);
+  const maxRate = Math.max(1, ...rates);
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Dashboard KPI — Performance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{weekLabel}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
-            <Calendar className="w-3.5 h-3.5" /> Aujourd&apos;hui
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setWeekStart((w) => subWeeks(w, 1))}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setWeekStart((w) => addWeeks(w, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Dashboard KPI"
+        subtitle={
+          selectedMonth
+            ? `${monthLabel(selectedMonth)} · rythme vs moyenne récente, volume = charge`
+            : "Charge de travail vs performance d’équipe"
+        }
+      />
 
-      {/* Bannière "données à importer" */}
-      <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-semibold text-amber-800">Infrastructure prête — données à importer</p>
-          <p className="text-xs text-amber-700 mt-0.5">
-            Les tables Supabase sont créées. Pour afficher les KPI, importez d&apos;abord les logs S8 et les volumes SAP,
-            puis mappez les employés et les tâches dans la section Administration.
-          </p>
-        </div>
-      </div>
-
-      {/* Cartes KPI par département */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        {kpis.map((kpi) => {
-          const variation = variationPct(kpi.current, kpi.previous);
-          return (
-            <div key={kpi.department}
-              className={cn("rounded-xl border-2 p-5 cursor-pointer hover:shadow-md transition-shadow", colorMap[kpi.color])}>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{kpi.department}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{kpi.unit}</p>
-                </div>
-                <BarChart3 className={cn("w-5 h-5", iconColorMap[kpi.color])} />
-              </div>
-
-              {kpi.current !== null ? (
-                <>
-                  <p className="text-3xl font-bold text-slate-900">{kpi.current}</p>
-                  {variation !== null && (
-                    <div className={cn("flex items-center gap-1 mt-2 text-sm font-medium",
-                      variation > 0 ? "text-green-600" : variation < 0 ? "text-red-600" : "text-slate-500")}>
-                      {variation > 0 ? <TrendingUp className="w-4 h-4" /> :
-                       variation < 0 ? <TrendingDown className="w-4 h-4" /> :
-                       <Minus className="w-4 h-4" />}
-                      {variation > 0 ? "+" : ""}{variation}% vs sem. précédente
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-2xl font-bold text-slate-300">—</p>
-                  <p className="text-xs text-slate-400 mt-1">Aucune donnée</p>
-                </div>
+      {months.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {months.map((m) => (
+            <button
+              key={m}
+              onClick={() => setSelectedMonth(m)}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                selectedMonth === m
+                  ? "bg-primary text-white"
+                  : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
               )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Résumé qualité des données */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4">Qualité des données — semaine sélectionnée</h3>
-        <div className="grid grid-cols-4 gap-4 text-center">
-          {[
-            { label: "Logs S8 validés", value: "—", sub: "sur 0 logs" },
-            { label: "Conformité", value: "—", sub: "seuil: 95%" },
-            { label: "Employés non mappés", value: "—", sub: "S8 + SAP" },
-            { label: "Tâches non mappées", value: "—", sub: "S8" },
-          ].map((item) => (
-            <div key={item.label} className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-xl font-bold text-slate-400">{item.value}</p>
-              <p className="text-xs font-medium text-slate-600 mt-0.5">{item.label}</p>
-              <p className="text-xs text-slate-400">{item.sub}</p>
-            </div>
+            >
+              {monthLabel(m)}
+            </button>
           ))}
         </div>
-      </div>
+      )}
+
+      {loading || !current ? (
+        <div className="text-center py-16 text-slate-400">Chargement…</div>
+      ) : (
+        <>
+          <WarehouseTeamCards
+            current={current}
+            previous={previous}
+            rolling={rolling}
+            previousRolling={previousRolling}
+          />
+
+          {snapshots.length >= 2 && (
+            <div className="grid md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-white border border-slate-200 rounded-xl p-5">
+                <p className="text-sm font-semibold text-slate-700 mb-1">Charge — lignes / mois</p>
+                <p className="text-xs text-slate-400 mb-4">Pas un score d’équipe. Un mois plus bas = moins de commandes.</p>
+                <div className="flex items-end gap-2 h-28">
+                  {snapshots.map((t) => (
+                    <button
+                      key={t.ym}
+                      onClick={() => setSelectedMonth(t.ym)}
+                      className="flex-1 flex flex-col items-center gap-1 h-full justify-end group"
+                      title={`${monthLabel(t.ym)} : ${t.team.totalLines.toLocaleString("fr-CA")} lig.`}
+                    >
+                      <span className="text-[10px] text-slate-500">
+                        {t.team.totalLines > 0 ? (t.team.totalLines / 1000).toFixed(1) + "k" : "—"}
+                      </span>
+                      <div
+                        className={cn(
+                          "w-full rounded-t-md min-h-[4px] transition-colors",
+                          t.ym === selectedMonth ? "bg-slate-600" : "bg-slate-200 group-hover:bg-slate-300"
+                        )}
+                        style={{ height: `${Math.max(6, (t.team.totalLines / maxLines) * 100)}%` }}
+                      />
+                      <span className={cn("text-[10px]", t.ym === selectedMonth ? "font-semibold text-slate-800" : "text-slate-400")}>
+                        {shortMonth(t.ym)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-5">
+                <p className="text-sm font-semibold text-slate-700 mb-1">Performance — l/h picking</p>
+                <p className="text-xs text-slate-400 mb-4">
+                  {rolling?.teamPickLinesPerHour != null
+                    ? `Moyenne récente : ${formatRate(rolling.teamPickLinesPerHour)} l/h`
+                    : "Comparable d’un mois à l’autre, même si le volume change."}
+                </p>
+                <div className="flex items-end gap-2 h-28">
+                  {snapshots.map((t) => (
+                    <button
+                      key={t.ym}
+                      onClick={() => setSelectedMonth(t.ym)}
+                      className="flex-1 flex flex-col items-center gap-1 h-full justify-end group"
+                      title={`${monthLabel(t.ym)} : ${formatRate(t.team.teamPickLinesPerHour)} l/h`}
+                    >
+                      <span className="text-[10px] text-slate-500">{formatRate(t.team.teamPickLinesPerHour)}</span>
+                      <div
+                        className={cn(
+                          "w-full rounded-t-md min-h-[4px] transition-colors",
+                          t.ym === selectedMonth ? "bg-primary" : "bg-primary/25 group-hover:bg-primary/40"
+                        )}
+                        style={{
+                          height: `${Math.max(6, ((t.team.teamPickLinesPerHour ?? 0) / maxRate) * 100)}%`,
+                        }}
+                      />
+                      <span className={cn("text-[10px]", t.ym === selectedMonth ? "font-semibold text-slate-800" : "text-slate-400")}>
+                        {shortMonth(t.ym)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Link
+            href="/kpi/production"
+            className="block bg-white border border-slate-200 rounded-xl p-5 mb-4 hover:border-slate-400 transition-colors"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Production · {monthLabel(selectedMonth)}</p>
+            <p className="text-lg font-bold text-slate-900 mt-1">
+              {prodActual == null ? "Pas de temps importé ce mois" : formatMinutes(prodActual)}
+            </p>
+            <p className="text-sm text-slate-600 mt-1">
+              Écart vs cible (imputée) · {prodVariance == null ? "—" : formatPct(prodVariance)}
+            </p>
+          </Link>
+
+          <Link href="/kpi/warehouse" className="block text-sm text-primary hover:underline">
+            Voir le détail Expédition (employés, mix, logs) →
+          </Link>
+        </>
+      )}
     </div>
   );
 }

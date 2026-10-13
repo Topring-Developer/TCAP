@@ -1,36 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
   Users,
   CalendarDays,
-  MinusCircle,
-  ArrowLeftRight,
-  BarChart3,
   TrendingUp,
-  Building2,
-  UserSquare2,
-  ListChecks,
-  ShieldCheck,
   ChevronDown,
   ChevronRight,
+  Settings,
+  FolderInput,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 type NavItem = {
   href: string;
   label: string;
-  icon: React.ElementType;
 };
+
+type NavDivider = {
+  kind: "divider";
+  label: string;
+};
+
+type NavEntry =
+  | ({ kind: "item" } & NavItem)
+  | NavDivider;
 
 type NavSection = {
   id: string;
   label: string;
   icon: React.ElementType;
-  items: NavItem[];
+  entries: NavEntry[];
 };
 
 const NAV_SECTIONS: NavSection[] = [
@@ -38,111 +40,190 @@ const NAV_SECTIONS: NavSection[] = [
     id: "capacity",
     label: "Capacité",
     icon: CalendarDays,
-    items: [
-      { href: "/dashboard", label: "Dashboard capacité", icon: LayoutDashboard },
-      { href: "/capacity", label: "Vue semaine", icon: CalendarDays },
+    entries: [
+      { kind: "item", href: "/dashboard", label: "Dashboard capacité" },
+      { kind: "item", href: "/capacity",  label: "Vue semaine" },
     ],
   },
   {
     id: "performance",
     label: "Performance",
     icon: TrendingUp,
-    items: [
-      { href: "/kpi", label: "Dashboard KPI", icon: BarChart3 },
-      { href: "/kpi/department", label: "Par département", icon: Building2 },
+    entries: [
+      { kind: "item", href: "/kpi",            label: "Dashboard KPI" },
+      { kind: "item", href: "/kpi/mois",       label: "Résumé du mois" },
+      { kind: "item", href: "/kpi/warehouse",  label: "KPI Expédition" },
+      { kind: "item", href: "/kpi/picking",    label: "KPI Picking" },
+      { kind: "item", href: "/kpi/production", label: "KPI Production" },
+      { kind: "item", href: "/kpi/production/employees", label: "Prod par employé" },
+      { kind: "item", href: "/kpi/inventory",  label: "KPI Inventaire" },
+      { kind: "item", href: "/kpi/receiving",  label: "KPI Réception" },
+      { kind: "item", href: "/kpi/department", label: "Par département" },
     ],
   },
   {
     id: "management",
     label: "Gestion",
     icon: Users,
-    items: [
-      { href: "/employees", label: "Employés & Horaires", icon: Users },
-      { href: "/exclusions", label: "Exclusions", icon: MinusCircle },
-      { href: "/adjustments", label: "Ajustements", icon: ArrowLeftRight },
+    entries: [
+      { kind: "item", href: "/employees", label: "Employés & Horaires" },
+      { kind: "item", href: "/events",    label: "Événements" },
     ],
   },
   {
-    id: "admin",
-    label: "Administration",
-    icon: ShieldCheck,
-    items: [
-      { href: "/admin/mapping-employees", label: "Mapping employés", icon: UserSquare2 },
-      { href: "/admin/mapping-tasks", label: "Mapping tâches", icon: ListChecks },
-      { href: "/admin/validation", label: "Validation données", icon: ShieldCheck },
+    id: "imports",
+    label: "Imports",
+    icon: FolderInput,
+    entries: [
+      { kind: "divider", label: "SAP" },
+      { kind: "item", href: "/admin/import/sap-control", label: "Contrôle SAP" },
+      { kind: "item", href: "/admin/import/picking",    label: "Picking" },
+      { kind: "item", href: "/admin/import/packaging",  label: "Emballage" },
+      { kind: "item", href: "/admin/import/receiving",  label: "Réception" },
+      { kind: "item", href: "/admin/import/inventory",  label: "Inventaire" },
+      { kind: "item", href: "/admin/import/standards",  label: "Temps standard PROD" },
+      { kind: "divider", label: "TWMS" },
+      { kind: "item", href: "/admin/import/production", label: "Temps par BOM" },
+      { kind: "item", href: "/admin/import/production-log", label: "Prod employé" },
+      { kind: "item", href: "/admin/twms",   label: "Vérif. logs TWMS" },
+      { kind: "item", href: "/admin/import", label: "Import S8" },
+      { kind: "divider", label: "Suivi" },
+      { kind: "item", href: "/admin/import-register", label: "Registre d'import" },
+    ],
+  },
+  {
+    id: "config",
+    label: "Configuration",
+    icon: Settings,
+    entries: [
+      { kind: "item", href: "/admin/capacity-settings",  label: "Seuil d'effectif" },
+      { kind: "item", href: "/admin/mapping-employees",  label: "Mapping employés" },
+      { kind: "item", href: "/admin/mapping-tasks",      label: "Mapping tâches" },
+      { kind: "item", href: "/admin/inventory-settings", label: "Objectif inventaire" },
+      { kind: "item", href: "/admin/validation",         label: "Validation données" },
     ],
   },
 ];
 
+const STORAGE_KEY = "tcap-sidebar-collapsed";
+
 export function Sidebar() {
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  function isActive(href: string) {
-    return pathname === href || (href !== "/" && pathname.startsWith(href));
-  }
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
+    setReady(true);
+  }, []);
 
-  function isSectionActive(section: NavSection) {
-    return section.items.some((item) => isActive(item.href));
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      if (next) setOpenId(null);
+      return next;
+    });
   }
 
   function toggleSection(id: string) {
-    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  // Section ouverte si un item est actif OU si pas encore fermée manuellement
-  function isSectionOpen(section: NavSection) {
-    if (collapsed[section.id] !== undefined) return !collapsed[section.id];
-    return isSectionActive(section);
+    if (collapsed) {
+      setCollapsed(false);
+      try {
+        localStorage.setItem(STORAGE_KEY, "0");
+      } catch {
+        /* ignore */
+      }
+      setOpenId(id);
+      return;
+    }
+    setOpenId((prev) => (prev === id ? null : id));
   }
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-slate-900 text-slate-100 flex flex-col">
+    <aside
+      className={`flex-shrink-0 bg-zinc-950 text-zinc-100 flex flex-col border-r border-zinc-800 transition-[width] duration-200 ease-out ${
+        collapsed ? "w-[68px]" : "w-60"
+      } ${ready ? "" : "opacity-0"}`}
+    >
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-slate-700">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">TOPRINGS</p>
-        <h1 className="text-lg font-bold text-white mt-0.5">TCAP</h1>
+      <div className={`border-b border-zinc-800 ${collapsed ? "px-2 py-4" : "px-5 py-5"}`}>
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-primary">TR</span>
+            <span className="text-xs font-bold text-white">TCAP</span>
+          </div>
+        ) : (
+          <>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">TOPRINGS</p>
+            <h1 className="text-base font-bold text-white mt-0.5">TCAP</h1>
+          </>
+        )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className={`flex-1 py-3 overflow-y-auto space-y-0.5 ${collapsed ? "px-1.5" : "px-2"}`}>
         {NAV_SECTIONS.map((section) => {
-          const open = isSectionOpen(section);
+          const open = openId === section.id;
           const SectionIcon = section.icon;
+
           return (
-            <div key={section.id}>
-              {/* En-tête de section */}
+            <div key={section.id} className="mb-1">
               <button
                 onClick={() => toggleSection(section.id)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                title={collapsed ? section.label : undefined}
+                className={`w-full flex items-center rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                  collapsed
+                    ? "justify-center px-0 py-2.5"
+                    : "justify-between px-3 py-2.5"
+                } ${
+                  open
+                    ? "text-white bg-zinc-800/80"
+                    : "text-zinc-300 hover:text-white hover:bg-zinc-800/60"
+                }`}
               >
-                <div className="flex items-center gap-2">
-                  <SectionIcon className="w-3.5 h-3.5" />
-                  {section.label}
+                <div className={`flex items-center ${collapsed ? "" : "gap-2.5"}`}>
+                  <SectionIcon className="w-4 h-4 shrink-0" />
+                  {!collapsed && <span>{section.label}</span>}
                 </div>
-                {open
-                  ? <ChevronDown className="w-3 h-3" />
-                  : <ChevronRight className="w-3 h-3" />}
+                {!collapsed && (
+                  <span className="text-zinc-400">
+                    {open
+                      ? <ChevronDown className="w-3.5 h-3.5" />
+                      : <ChevronRight className="w-3.5 h-3.5" />}
+                  </span>
+                )}
               </button>
 
-              {/* Items */}
-              {open && (
-                <div className="mt-0.5 space-y-0.5 mb-2">
-                  {section.items.map(({ href, label, icon: Icon }) => {
-                    const active = isActive(href);
+              {!collapsed && open && (
+                <div className="mt-1 ml-5 pl-3 border-l border-zinc-700 space-y-0.5">
+                  {section.entries.map((entry, i) => {
+                    if (entry.kind === "divider") {
+                      return (
+                        <div key={`div-${i}`} className="flex items-center gap-2 px-2 pt-2.5 pb-0.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                            {entry.label}
+                          </span>
+                          <div className="flex-1 h-px bg-zinc-700/80" />
+                        </div>
+                      );
+                    }
+
                     return (
                       <Link
-                        key={href}
-                        href={href}
-                        className={cn(
-                          "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ml-2",
-                          active
-                            ? "bg-blue-600 text-white"
-                            : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                        )}
+                        key={entry.href}
+                        href={entry.href}
+                        className="block px-2.5 py-2 rounded-md text-sm font-normal text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-all"
                       >
-                        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="truncate">{label}</span>
+                        <span className="truncate">{entry.label}</span>
                       </Link>
                     );
                   })}
@@ -153,8 +234,21 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="px-5 py-4 border-t border-slate-700">
-        <p className="text-xs text-slate-500">v1.1 · TOPRINGS</p>
+      <div className={`border-t border-zinc-800 ${collapsed ? "p-1.5" : "px-3 py-3"}`}>
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? "Ouvrir le menu" : "Ranger le menu"}
+          className={`w-full flex items-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all ${
+            collapsed ? "justify-center py-2.5" : "justify-between px-2 py-2"
+          }`}
+        >
+          {!collapsed && (
+            <span className="text-[10px] text-zinc-500 font-medium">v1.1 · TOPRINGS</span>
+          )}
+          {collapsed
+            ? <PanelLeftOpen className="w-4 h-4" />
+            : <PanelLeftClose className="w-4 h-4" />}
+        </button>
       </div>
     </aside>
   );

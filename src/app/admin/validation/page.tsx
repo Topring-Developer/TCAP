@@ -34,6 +34,8 @@ const IMPORT_TYPE_LABELS: Record<string, string> = {
   SAP_PICKING:          "SAP — Picking",
   SAP_PACKING:          "SAP — Emballage",
   SAP_RECEIPTS:         "SAP — Réceptions",
+  SAP_RECEIVING:        "SAP — Réception (agrégé)",
+  SAP_INVENTORY:        "SAP — Inventaire cyclique",
   SAP_PRERECEPTIONS:    "SAP — Pré-réceptions",
   PRODUCTION_STANDARDS: "Standards de production",
 };

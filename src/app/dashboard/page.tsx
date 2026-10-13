@@ -11,8 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import type {
   Employee,
   EmployeeWorkSchedule,
-  EmployeeExclusionWithType,
-  EmployeeAdjustment,
+  CapacityEvent,
 } from "@/lib/supabase/types";
 import { computeDayCapacity, formatHours } from "@/lib/capacity";
 import { getWeekStart, getWeekDays, formatDate } from "@/lib/utils";
@@ -23,8 +22,7 @@ export default function DashboardPage() {
   const supabase = createClient();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [schedules, setSchedules] = useState<EmployeeWorkSchedule[]>([]);
-  const [exclusions, setExclusions] = useState<EmployeeExclusionWithType[]>([]);
-  const [adjustments, setAdjustments] = useState<EmployeeAdjustment[]>([]);
+  const [events, setEvents] = useState<CapacityEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const today = new Date();
@@ -38,27 +36,20 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: emps }, { data: scheds }, { data: excs }, { data: adjs }] = await Promise.all([
-      // Inclure employés actifs + désactivés après le début de la plage analysée
+    const [{ data: emps }, { data: scheds }, { data: evts }] = await Promise.all([
       supabase.from("employees").select("*")
         .or(`is_active.eq.true,deactivated_at.gte.${rangeStart.toISOString()}`)
         .order("full_name"),
       supabase.from("employee_work_schedule").select("*"),
       supabase
-        .from("employee_exclusions")
-        .select("*, exclusion_types(*), employees(id, full_name)")
-        .lt("start_datetime", rangeEnd.toISOString())
-        .gt("end_datetime", rangeStart.toISOString()),
-      supabase
-        .from("employee_adjustments")
-        .select("*, employees(id, full_name)")
+        .from("capacity_events")
+        .select("*")
         .lt("start_datetime", rangeEnd.toISOString())
         .gt("end_datetime", rangeStart.toISOString()),
     ]);
     setEmployees(emps ?? []);
     setSchedules(scheds ?? []);
-    setExclusions((excs as EmployeeExclusionWithType[]) ?? []);
-    setAdjustments((adjs as EmployeeAdjustment[]) ?? []);
+    setEvents((evts as CapacityEvent[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -69,9 +60,8 @@ export default function DashboardPage() {
     const schedule = isoDay <= 5
       ? schedules.find((s) => s.employee_id === emp.id && s.weekday === isoDay)
       : undefined;
-    const empExclusions = exclusions.filter((e) => e.employee_id === emp.id);
-    const empAdjustments = adjustments.filter((a) => a.employee_id === emp.id);
-    return computeDayCapacity(emp, dateStr, schedule, empExclusions, empAdjustments);
+    const empEvents = events.filter((e) => e.employee_id === emp.id);
+    return computeDayCapacity(emp, dateStr, schedule, empEvents);
   }
 
   // KPI aujourd'hui
@@ -83,10 +73,10 @@ export default function DashboardPage() {
   const weekCaps = weekDays.slice(0, 5).flatMap((day) =>
     employees.map((emp) => getCapacity(emp, formatDate(day)))
   );
-  const weekAbsenceHours = weekCaps.reduce((s, c) => s + c.exclusionHours + c.negativeAdjustmentHours, 0);
+  const weekAbsenceHours = weekCaps.reduce((s, c) => s + c.totalNegativeHours, 0);
   const weekOvertimeHours = weekCaps.filter((c) => c.overtime > 0).reduce((s, c) => s + c.overtime, 0);
   const weekAbsents = new Set(
-    weekCaps.filter((c) => c.exclusionHours > 0 || c.negativeAdjustmentHours > 0).map((c) => c.employee.id)
+    weekCaps.filter((c) => c.totalNegativeHours > 0).map((c) => c.employee.id)
   ).size;
 
   // Données graphiques — capacité par jour cette semaine
@@ -97,7 +87,7 @@ export default function DashboardPage() {
       name: format(day, "EEE d", { locale: fr }),
       planifié: Math.round(caps.reduce((s, c) => s + c.scheduledHours, 0) * 10) / 10,
       disponible: Math.round(caps.reduce((s, c) => s + c.availableHours, 0) * 10) / 10,
-      absences: Math.round(caps.reduce((s, c) => s + c.exclusionHours + c.negativeAdjustmentHours, 0) * 10) / 10,
+      absences: Math.round(caps.reduce((s, c) => s + c.totalNegativeHours, 0) * 10) / 10,
       overtime: Math.round(caps.filter((c) => c.overtime > 0).reduce((s, c) => s + c.overtime, 0) * 10) / 10,
     };
   });
@@ -107,7 +97,7 @@ export default function DashboardPage() {
     .map((emp) => {
       const hours = weekDays.slice(0, 5).reduce((s, day) => {
         const cap = getCapacity(emp, formatDate(day));
-        return s + cap.exclusionHours + cap.negativeAdjustmentHours;
+        return s + cap.totalNegativeHours;
       }, 0);
       return { name: emp.full_name.split(" ")[0], hours: Math.round(hours * 10) / 10 };
     })
