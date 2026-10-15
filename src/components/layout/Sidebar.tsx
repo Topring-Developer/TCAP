@@ -11,8 +11,11 @@ import {
   FolderInput,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type NavItem = {
   href: string;
@@ -105,12 +108,29 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+/** Sections réservées aux administrateurs uniquement */
+const ADMIN_SECTION_IDS = ["imports", "config"];
+
 const STORAGE_KEY = "tcap-sidebar-collapsed";
 
-export function Sidebar() {
+export function Sidebar({ role, userEmail }: { role: "admin" | "user"; userEmail: string | null }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  const visibleSections = NAV_SECTIONS.filter(
+    (s) => role === "admin" || !ADMIN_SECTION_IDS.includes(s.id)
+  );
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   useEffect(() => {
     try {
@@ -171,7 +191,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className={`flex-1 py-3 overflow-y-auto space-y-0.5 ${collapsed ? "px-1.5" : "px-2"}`}>
-        {NAV_SECTIONS.map((section) => {
+        {visibleSections.map((section) => {
           const open = openId === section.id;
           const SectionIcon = section.icon;
 
@@ -235,10 +255,42 @@ export function Sidebar() {
       </nav>
 
       <div className={`border-t border-zinc-800 ${collapsed ? "p-1.5" : "px-3 py-3"}`}>
+        {/* Infos utilisateur */}
+        {!collapsed && userEmail && (
+          <div className="mb-2 px-2">
+            <p className="text-[10px] text-zinc-500 truncate">{userEmail}</p>
+            <span className={`inline-block mt-0.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+              role === "admin"
+                ? "bg-primary/20 text-primary"
+                : "bg-zinc-700 text-zinc-300"
+            }`}>
+              {role === "admin" ? "Admin" : "Consultation"}
+            </span>
+          </div>
+        )}
+
+        {/* Bouton déconnexion */}
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          title={collapsed ? "Se déconnecter" : undefined}
+          className={`w-full flex items-center rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-all ${
+            collapsed ? "justify-center py-2.5" : "justify-between px-2 py-2"
+          }`}
+        >
+          {!collapsed && (
+            <span className="text-xs font-medium">
+              {loggingOut ? "Déconnexion…" : "Se déconnecter"}
+            </span>
+          )}
+          <LogOut className="w-4 h-4 shrink-0" />
+        </button>
+
+        {/* Bouton collapse */}
         <button
           onClick={toggleCollapsed}
           title={collapsed ? "Ouvrir le menu" : "Ranger le menu"}
-          className={`w-full flex items-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all ${
+          className={`w-full flex items-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all mt-1 ${
             collapsed ? "justify-center py-2.5" : "justify-between px-2 py-2"
           }`}
         >

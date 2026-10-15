@@ -1,55 +1,78 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
 
-/**
- * Protection temporaire (Basic Auth) pour verrouiller le déploiement public.
- * Remplacer plus tard par Supabase Auth + rôles admin/consultation.
- *
- * Variables Vercel / .env.local :
- *   BASIC_AUTH_USER
- *   BASIC_AUTH_PASSWORD
- */
-export function middleware(req: NextRequest) {
-  const user = process.env.BASIC_AUTH_USER;
-  const password = process.env.BASIC_AUTH_PASSWORD;
+/** Routes accessibles sans connexion */
+const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
-  // En local : pas de blocage si les vars ne sont pas définies
-  if (!user || !password) {
-    if (process.env.NODE_ENV === "development") {
-      return NextResponse.next();
-    }
-    return new NextResponse("Site non configuré (BASIC_AUTH_* manquants).", {
-      status: 503,
-    });
+/** Préfixe des routes réservées aux administrateurs */
+const ADMIN_PREFIX = "/admin";
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Laisser passer les assets internes Next.js
+  if (pathname.startsWith("/_next") || pathname === "/favicon.ico") {
+    return NextResponse.next();
   }
 
-  const header = req.headers.get("authorization");
-  if (header?.startsWith("Basic ")) {
-    try {
-      const decoded = atob(header.slice(6));
-      const sep = decoded.indexOf(":");
-      const u = sep >= 0 ? decoded.slice(0, sep) : decoded;
-      const p = sep >= 0 ? decoded.slice(sep + 1) : "";
-      if (u === user && p === password) {
-        return NextResponse.next();
-      }
-    } catch {
-      /* identifiants invalides */
+  // Réponse mutable — le client SSR doit pouvoir mettre à jour les cookies
+  let res = NextResponse.next({ request: req });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            req.cookies.set(name, value);
+            res.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  // Rafraîchit la session si le token est expiré
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const isPublic = PUBLIC_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(p + "/")
+  );
+
+  // Non connecté → redirection vers la page de login
+  if (!user && !isPublic) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Déjà connecté et sur /login → accueil
+  if (user && pathname === "/login") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
+  // Rôle stocké dans app_metadata (modifiable uniquement par l'admin Supabase)
+  if (user && pathname.startsWith(ADMIN_PREFIX)) {
+    const role = (user.app_metadata?.role ?? "user") as string;
+    if (role !== "admin") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
     }
   }
 
-  return new NextResponse("Authentification requise", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="TCAP", charset="UTF-8"',
-    },
-  });
+  return res;
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Tout sauf assets Next / favicon (évite de re-demander le login à chaque image).
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
