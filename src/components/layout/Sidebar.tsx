@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 type NavItem = {
   href: string;
   label: string;
+  adminOnly?: boolean;
 };
 
 type NavDivider = {
@@ -44,8 +46,8 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Capacité",
     icon: CalendarDays,
     entries: [
-      { kind: "item", href: "/dashboard", label: "Dashboard capacité" },
-      { kind: "item", href: "/capacity",  label: "Vue semaine" },
+      { kind: "item", href: "/dashboard", label: "Dashboard capacité", adminOnly: true },
+      { kind: "item", href: "/capacity",  label: "Dashboard absence" },
     ],
   },
   {
@@ -53,15 +55,15 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Performance",
     icon: TrendingUp,
     entries: [
-      { kind: "item", href: "/kpi",            label: "Dashboard KPI" },
-      { kind: "item", href: "/kpi/mois",       label: "Résumé du mois" },
+      { kind: "item", href: "/kpi",            label: "Dashboard KPI",     adminOnly: true },
+      { kind: "item", href: "/kpi/mois",       label: "Résumé du mois",    adminOnly: true },
       { kind: "item", href: "/kpi/warehouse",  label: "KPI Expédition" },
       { kind: "item", href: "/kpi/picking",    label: "KPI Picking" },
       { kind: "item", href: "/kpi/production", label: "KPI Production" },
       { kind: "item", href: "/kpi/production/employees", label: "Prod par employé" },
       { kind: "item", href: "/kpi/inventory",  label: "KPI Inventaire" },
       { kind: "item", href: "/kpi/receiving",  label: "KPI Réception" },
-      { kind: "item", href: "/kpi/department", label: "Par département" },
+      { kind: "item", href: "/kpi/department", label: "Par département",   adminOnly: true },
     ],
   },
   {
@@ -238,13 +240,22 @@ export function Sidebar({ role, userEmail }: { role: "ADMIN" | "CONSULTATION"; u
                       );
                     }
 
+                    // Masquer les items adminOnly pour les non-admins
+                    if (entry.adminOnly && role !== "ADMIN") return null;
+
                     return (
                       <Link
                         key={entry.href}
                         href={entry.href}
-                        className="block px-2.5 py-2 rounded-md text-sm font-normal text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-all"
+                        className="flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-normal text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-all group"
                       >
                         <span className="truncate">{entry.label}</span>
+                        {entry.adminOnly && (
+                          <ShieldCheck
+                            className="w-3 h-3 shrink-0 text-primary/50 group-hover:text-primary transition-colors ml-1"
+                            aria-label="Visible par les admins uniquement"
+                          />
+                        )}
                       </Link>
                     );
                   })}
