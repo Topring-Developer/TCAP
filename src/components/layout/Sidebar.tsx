@@ -99,6 +99,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Configuration",
     icon: Settings,
     entries: [
+      { kind: "item", href: "/admin/users",              label: "Gestion des accès" },
       { kind: "item", href: "/admin/capacity-settings",  label: "Seuil d'effectif" },
       { kind: "item", href: "/admin/mapping-employees",  label: "Mapping employés" },
       { kind: "item", href: "/admin/mapping-tasks",      label: "Mapping tâches" },
