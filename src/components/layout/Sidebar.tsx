@@ -114,7 +114,7 @@ const ADMIN_SECTION_IDS = ["imports", "config"];
 
 const STORAGE_KEY = "tcap-sidebar-collapsed";
 
-export function Sidebar({ role, userEmail }: { role: "admin" | "user"; userEmail: string | null }) {
+export function Sidebar({ role, userEmail }: { role: "ADMIN" | "CONSULTATION"; userEmail: string | null }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -123,7 +123,7 @@ export function Sidebar({ role, userEmail }: { role: "admin" | "user"; userEmail
   const supabase = createClient();
 
   const visibleSections = NAV_SECTIONS.filter(
-    (s) => role === "admin" || !ADMIN_SECTION_IDS.includes(s.id)
+    (s) => role === "ADMIN" || !ADMIN_SECTION_IDS.includes(s.id)
   );
 
   async function handleLogout() {
@@ -261,11 +261,11 @@ export function Sidebar({ role, userEmail }: { role: "admin" | "user"; userEmail
           <div className="mb-2 px-2">
             <p className="text-[10px] text-zinc-500 truncate">{userEmail}</p>
             <span className={`inline-block mt-0.5 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-              role === "admin"
+              role === "ADMIN"
                 ? "bg-primary/20 text-primary"
                 : "bg-zinc-700 text-zinc-300"
             }`}>
-              {role === "admin" ? "Admin" : "Consultation"}
+              {role === "ADMIN" ? "Admin" : "Consultation"}
             </span>
           </div>
         )}

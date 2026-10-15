@@ -12,15 +12,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Le rôle est stocké dans app_metadata (modifiable uniquement par l'admin Supabase)
-  const role = (user?.app_metadata?.role ?? "user") as "admin" | "user";
-  const userEmail = user?.email ?? null;
+  // Rôle lu depuis la table users (source de vérité)
+  let role: "ADMIN" | "CONSULTATION" | null = null;
+  if (user?.email) {
+    const { data } = await supabase
+      .from("users")
+      .select("role")
+      .eq("email", user.email)
+      .maybeSingle();
+    role = (data?.role ?? null) as "ADMIN" | "CONSULTATION" | null;
+  }
+
+  const showSidebar = !!user && !!role;
 
   return (
     <html lang="fr">
-      <body className={`${user ? "flex h-screen overflow-hidden" : ""} bg-gray-50`}>
-        {user && <Sidebar role={role} userEmail={userEmail} />}
-        <main className={user ? "flex-1 overflow-y-auto" : "min-h-screen"}>
+      <body className={`${showSidebar ? "flex h-screen overflow-hidden" : ""} bg-gray-50`}>
+        {showSidebar && (
+          <Sidebar role={role!} userEmail={user?.email ?? null} />
+        )}
+        <main className={showSidebar ? "flex-1 overflow-y-auto" : "min-h-screen"}>
           {children}
         </main>
       </body>

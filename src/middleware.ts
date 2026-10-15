@@ -2,21 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 
-/** Routes accessibles sans connexion */
+/** Routes accessibles sans session */
 const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
-/** Préfixe des routes réservées aux administrateurs */
+/** Page affichée aux utilisateurs connectés mais non approuvés */
+const PENDING_PATH = "/pending";
+
+/** Routes réservées aux admins */
 const ADMIN_PREFIX = "/admin";
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Laisser passer les assets internes Next.js
   if (pathname.startsWith("/_next") || pathname === "/favicon.ico") {
     return NextResponse.next();
   }
 
-  // Réponse mutable — le client SSR doit pouvoir mettre à jour les cookies
   let res = NextResponse.next({ request: req });
 
   const supabase = createServerClient(
@@ -24,9 +25,7 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
+        getAll() { return req.cookies.getAll(); },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           cookiesToSet.forEach(({ name, value, options }) => {
             req.cookies.set(name, value);
@@ -37,33 +36,52 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  // Rafraîchit la session si le token est expiré
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const isPublic = PUBLIC_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/")
   );
 
-  // Non connecté → redirection vers la page de login
+  // 1. Pas connecté → login
   if (!user && !isPublic) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Déjà connecté et sur /login → accueil
+  // 2. Connecté → on quitte /login
   if (user && pathname === "/login") {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  // Rôle stocké dans app_metadata (modifiable uniquement par l'admin Supabase)
-  if (user && pathname.startsWith(ADMIN_PREFIX)) {
-    const role = (user.app_metadata?.role ?? "user") as string;
-    if (role !== "admin") {
+  // 3. Connecté → vérification dans la table users
+  if (user && !isPublic) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role")
+      .eq("email", user.email)
+      .maybeSingle();
+
+    const isPending = pathname === PENDING_PATH;
+
+    // Pas encore approuvé → /pending
+    if (!profile && !isPending) {
+      const url = req.nextUrl.clone();
+      url.pathname = PENDING_PATH;
+      return NextResponse.redirect(url);
+    }
+
+    // Déjà approuvé → pas besoin de rester sur /pending
+    if (profile && isPending) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    // Route admin → ADMIN uniquement
+    if (profile && pathname.startsWith(ADMIN_PREFIX) && profile.role !== "ADMIN") {
       const url = req.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
