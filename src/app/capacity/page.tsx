@@ -785,7 +785,7 @@ function AttendanceCell({
             "text-[10px] text-slate-500 hover:text-slate-800 font-medium"
           )}
           onClick={(e) => { e.stopPropagation(); onOTClick(); }}
-          title="Ajouter OT / boost"
+          title="Ajouter OT / plage"
         >
           <Plus className="w-2.5 h-2.5" />
           OT

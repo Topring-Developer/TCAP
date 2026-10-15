@@ -173,7 +173,7 @@ export default function DashboardPage() {
               <YAxis tick={{ fontSize: 12, fill: "#94a3b8" }} />
               <RechartsTooltip
                 contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                formatter={(value: number) => [`${value}h`, ""]}
+                formatter={(value) => [`${value ?? 0}h`, ""]}
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="planifié" fill="#e2e8f0" radius={[3, 3, 0, 0]} />
@@ -192,7 +192,7 @@ export default function DashboardPage() {
               <YAxis tick={{ fontSize: 12, fill: "#94a3b8" }} />
               <RechartsTooltip
                 contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                formatter={(value: number) => [`${value}h`, ""]}
+                formatter={(value) => [`${value ?? 0}h`, ""]}
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="absences" fill="#ef4444" radius={[3, 3, 0, 0]} />
@@ -216,7 +216,7 @@ export default function DashboardPage() {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: "#64748b" }} width={70} />
                 <RechartsTooltip
                   contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                  formatter={(value: number) => [`${value}h d'absences`, ""]}
+                  formatter={(value) => [`${value ?? 0}h d'absences`, ""]}
                 />
                 <Bar dataKey="hours" fill="#ef4444" radius={[0, 3, 3, 0]} />
               </BarChart>
@@ -237,7 +237,7 @@ export default function DashboardPage() {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: "#64748b" }} width={70} />
                 <RechartsTooltip
                   contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                  formatter={(value: number) => [`${value}h d'overtime`, ""]}
+                  formatter={(value) => [`${value ?? 0}h d'overtime`, ""]}
                 />
                 <Bar dataKey="hours" fill="#8b5cf6" radius={[0, 3, 3, 0]} />
               </BarChart>

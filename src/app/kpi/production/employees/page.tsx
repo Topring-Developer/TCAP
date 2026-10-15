@@ -7,6 +7,7 @@ import { fetchAllRows } from "@/lib/supabase/fetchAll";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ProductionDrillModal } from "@/components/kpi/ProductionDrillModal";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import {
   EXCLUSION_LABELS,
   type ExclusionReason,
@@ -17,6 +18,7 @@ import {
   buildPersonSlices,
   extractSeries,
   formatMinutes,
+  formatUnitMinutes,
   normalizeBom,
   soloBomIds,
   summarizePeople,
@@ -172,9 +174,9 @@ export default function ProductionEmployeesPage() {
     [lines, solo, standards]
   );
 
-  // Statistiques de l'équipe par item (pour comparer chaque employé à la moyenne)
-  const teamStats = useMemo(
-    () => teamStatsByItem(buildPersonSlices(lines, solo, standards)),
+  // Slices globales — Moy. équipe % recalculée par employé en excluant celui-ci
+  const allSlices = useMemo(
+    () => buildPersonSlices(lines, solo, standards),
     [lines, solo, standards]
   );
 
@@ -209,6 +211,14 @@ export default function ProductionEmployeesPage() {
         title="Prod par employé"
         subtitle="Rendement sur les BOM faits par une seule personne. Le total d'équipe reste sur KPI Production."
       />
+      <p className="mb-6 -mt-2">
+        <Link
+          href="/kpi/production/employees/aide"
+          className="text-sm text-primary hover:underline"
+        >
+          Comprendre les colonnes →
+        </Link>
+      </p>
 
       {months.length > 0 && (
         <div className="flex gap-2 mb-6 flex-wrap">
@@ -269,7 +279,7 @@ export default function ProductionEmployeesPage() {
                     lines={lines}
                     solo={solo}
                     standards={standards}
-                    teamStats={teamStats}
+                    allSlices={allSlices}
                     onToggle={() => setOpenId((cur) => (cur === row.idSap ? null : row.idSap))}
                     onOpenItem={openItem}
                   />
@@ -278,7 +288,11 @@ export default function ProductionEmployeesPage() {
             </table>
           </div>
           <p className="text-xs text-slate-400 mt-3">
-            L'écart est cible − réel sur les BOM solo inclus, comme le KPI du mois. Un clic sur un employé affiche ses items triés du plus grand écart au plus petit, avec la moyenne équipe sur le même item.
+            L&apos;écart est cible − réel sur les BOM solo inclus (sert au tri). Moy. équipe % = pairs sur le même item, sans cet employé.
+            {" "}
+            <Link href="/kpi/production/employees/aide" className="text-primary hover:underline">
+              Voir les formules
+            </Link>
           </p>
 
           {/* Hors rendement — en bas de page */}
@@ -326,7 +340,7 @@ function PersonBlock({
   lines,
   solo,
   standards,
-  teamStats,
+  allSlices,
   onToggle,
   onOpenItem,
 }: {
@@ -337,7 +351,7 @@ function PersonBlock({
   lines: LogLine[];
   solo: Set<string>;
   standards: Map<string, number>;
-  teamStats: Map<string, { rendementPct: number }>;
+  allSlices: PersonSlice[];
   onToggle: () => void;
   onOpenItem: (itemCode: string, quantity: number, actual: number, target: number) => void;
 }) {
@@ -349,6 +363,11 @@ function PersonBlock({
       standards
     ).filter((s) => s.included);
   }, [open, lines, row.idSap, solo, standards]);
+
+  const teamStats = useMemo(
+    () => (open ? teamStatsByItem(allSlices, { excludeIdSap: row.idSap }) : new Map()),
+    [open, allSlices, row.idSap]
+  );
 
   // Tableau plat d'items, trié par écart total (plus négatif = plus coûteux = en premier)
   const itemRows = useMemo(() => {
@@ -397,11 +416,13 @@ function PersonBlock({
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 uppercase tracking-wide border-y border-slate-100">
                     <th className="px-6 py-2 text-left font-semibold">Item</th>
-                    <th className="px-3 py-2 text-right font-semibold">Réel</th>
-                    <th className="px-3 py-2 text-right font-semibold">Cible</th>
-                    <th className="px-3 py-2 text-right font-semibold">Écart</th>
-                    <th className="px-3 py-2 text-right font-semibold">Vous %</th>
-                    <th className="px-3 py-2 text-right font-semibold">Moy. équipe %</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="Temps réel total sur cet item (BOM solo inclus)">Réel</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="Temps cible total = standard × unités">Cible</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="Cible − réel. Sert surtout à trier les items coûteux">Écart</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="Temps réel ÷ unités produites">Réel / u</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="Temps standard par unité (référence)">Cible / u</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="(Cible ÷ Réel) × 100. ≥ 100 % = dans le standard ou mieux">Vous %</th>
+                    <th className="px-3 py-2 text-right font-semibold cursor-help" title="Même indice pour les autres employés (BOM solo), sans vous. « — » si aucun pair">Moy. équipe %</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -412,6 +433,8 @@ function PersonBlock({
                       : null;
                     const teamPct = teamStats.get(code)?.rendementPct ?? null;
                     const isPersonal = teamPct !== null && personPct !== null && Math.abs(personPct - teamPct) >= 10;
+                    const actualPerUnit = acc.quantity > 0 ? acc.minutes / acc.quantity : null;
+                    const targetPerUnit = standards.get(code) ?? (acc.quantity > 0 && acc.target > 0 ? acc.target / acc.quantity : null);
 
                     return (
                       <tr
@@ -426,6 +449,12 @@ function PersonBlock({
                           ecart > 0 ? "text-[#047857]" : ecart < 0 ? "text-primary" : "text-slate-500"
                         )}>
                           {fmtSigned(ecart)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                          {actualPerUnit != null ? formatUnitMinutes(actualPerUnit) : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                          {targetPerUnit != null ? formatUnitMinutes(targetPerUnit) : "—"}
                         </td>
                         <td className={cn("px-3 py-2 text-right tabular-nums",
                           personPct === null ? "text-slate-400" :

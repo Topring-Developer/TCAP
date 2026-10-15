@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   type FocusItem,
   formatMinutes,
+  formatUnitMinutes,
   normalizeBom,
   soloBomIds,
 } from "@/lib/production";
@@ -312,8 +313,38 @@ export function ProductionDrillModal({ item, months, onClose }: Props) {
             </div>
             <h2 className="text-xl font-bold text-slate-900 font-mono">{item.itemCode}</h2>
             <p className="text-sm text-slate-500 mt-0.5">
-              Écart = standard − réel. Les plus gros écarts négatifs sont en haut.
+              Écart = cible − réel (tri). Les temps unitaires montrent le rythme réel vs le standard.
             </p>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400">Réel / u</p>
+                <p className="font-semibold tabular-nums text-slate-800">
+                  {item.quantity > 0
+                    ? formatUnitMinutes(item.actualMinutes / item.quantity)
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400">Cible / u</p>
+                <p className="font-semibold tabular-nums text-slate-600">
+                  {standardPerUnit != null
+                    ? formatUnitMinutes(standardPerUnit)
+                    : item.quantity > 0 && item.targetMinutes > 0
+                      ? formatUnitMinutes(item.targetMinutes / item.quantity)
+                      : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400">Écart total</p>
+                <p className={cn(
+                  "font-semibold tabular-nums",
+                  item.varianceMinutes > 0 ? "text-[#047857]" :
+                  item.varianceMinutes < 0 ? "text-primary" : "text-slate-500"
+                )}>
+                  {item.targetMinutes > 0 ? fmtEcart(item.varianceMinutes) : "—"}
+                </p>
+              </div>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -385,18 +416,28 @@ export function ProductionDrillModal({ item, months, onClose }: Props) {
                             <span className="text-[11px] bg-white/80 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
                               {bom.totalQuantity.toLocaleString("fr-CA")} unités
                             </span>
+                            {bom.totalQuantity > 0 && (
+                              <span className="text-[11px] bg-white/80 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                                {formatUnitMinutes(bom.totalDurationMinutes / bom.totalQuantity)} / u
+                                {standardPerUnit != null && (
+                                  <span className="text-slate-400"> · cible {formatUnitMinutes(standardPerUnit)}</span>
+                                )}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-[10px] uppercase tracking-widest text-slate-500">Écart vs standard</p>
-                          <p className={cn(
-                            "text-base font-semibold tabular-nums",
-                            bomBad && "text-primary",
-                            bomGood && "text-[#047857]",
-                            bomEcart == null && "text-slate-400"
-                          )}>
-                            {bomEcart == null ? "—" : fmtEcart(bomEcart)}
-                          </p>
+                        <div className="text-right flex-shrink-0 space-y-1">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-slate-500">Écart vs standard</p>
+                            <p className={cn(
+                              "text-base font-semibold tabular-nums",
+                              bomBad && "text-primary",
+                              bomGood && "text-[#047857]",
+                              bomEcart == null && "text-slate-400"
+                            )}>
+                              {bomEcart == null ? "—" : fmtEcart(bomEcart)}
+                            </p>
+                          </div>
                         </div>
                       </button>
 
@@ -435,6 +476,19 @@ export function ProductionDrillModal({ item, months, onClose }: Props) {
                                       {empNames.has(emp.idSap) && <span className="font-mono mr-1.5">#{emp.idSap} ·</span>}
                                       {emp.totalQuantity.toLocaleString("fr-CA")} unités
                                       {!emp.solo && " · partagé"}
+                                      {emp.totalQuantity > 0 && (
+                                        <>
+                                          {" · "}
+                                          <span className="text-slate-600">
+                                            {formatUnitMinutes(emp.totalDurationMinutes / emp.totalQuantity)} / u
+                                          </span>
+                                          {standardPerUnit != null && (
+                                            <span className="text-slate-400">
+                                              {" "}(cible {formatUnitMinutes(standardPerUnit)})
+                                            </span>
+                                          )}
+                                        </>
+                                      )}
                                     </p>
                                   </div>
                                   <span className={cn(

@@ -7,6 +7,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { fetchAllRows } from "@/lib/supabase/fetchAll";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PickingAnnualChart } from "@/components/kpi/PickingAnnualChart";
 import { cn } from "@/lib/utils";
 import {
   computeTeamPickingSummary,
@@ -267,6 +268,15 @@ export default function KpiPickingPage() {
         </div>
       ) : (
         <>
+          {isLast12View && (
+            <PickingAnnualChart
+              sapRows={sapRows}
+              s8Logs={s8Logs}
+              waveRows={waveRows}
+              employeeNames={employeeNames}
+            />
+          )}
+
           {/* Cartes équipe — rythme basé sur TOUTES les heures */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <KpiCard

@@ -105,7 +105,7 @@ export type CapacityEventType = PositiveEventType | AbsenceEventType | TimingEve
 
 export const CAPACITY_EVENT_LABELS: Record<CapacityEventType, string> = {
   overtime:           "Overtime",
-  part_time_boost:    "Boost temps partiel",
+  part_time_boost:    "Plage temps partiel",
   late:               "Retard",
   early_departure:    "Départ hâtif",
   planned_absence:    "Absence planifiée",

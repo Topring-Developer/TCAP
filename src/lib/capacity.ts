@@ -124,7 +124,7 @@ export function getNethrisReason(id: NethrisAbsenceReasonId | null | undefined):
 
 export const EVENT_TYPE_LABELS: Record<CapacityEventType, string> = {
   overtime:          "Overtime",
-  part_time_boost:   "Boost temps partiel",
+  part_time_boost:   "Plage temps partiel",
   late:              "Retard",
   early_departure:   "Départ hâtif",
   planned_absence:   "Absence planifiée",

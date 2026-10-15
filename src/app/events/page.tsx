@@ -417,7 +417,7 @@ export default function EventsPage() {
               <option value="">Tous les types</option>
               <optgroup label="Positifs">
                 <option value="overtime">Overtime</option>
-                <option value="part_time_boost">Boost temps partiel</option>
+                <option value="part_time_boost">Plage temps partiel</option>
               </optgroup>
               <optgroup label="Absences">
                 {NETHRIS_ABSENCE_REASONS.map((r) => (

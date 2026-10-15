@@ -726,15 +726,19 @@ export function summarizePeople(
 }
 
 /**
- * Calcule le rendement moyen de l'équipe par itemcode à partir des slices inclus.
- * Utile pour contextualiser le rendement d'un employé (standard serré vs problème individuel).
+ * Rendement des pairs par itemcode : (Σ cible / Σ réel) × 100 sur BOM solo inclus.
+ * Par défaut exclut `excludeIdSap` pour comparer l'employé aux autres (formation ciblée).
+ * Si aucun pair n'a de données pour un item, la clé est absente (UI → « — »).
  */
 export function teamStatsByItem(
-  slices: PersonSlice[]
+  slices: PersonSlice[],
+  options?: { excludeIdSap?: string }
 ): Map<string, { rendementPct: number }> {
+  const excludeIdSap = options?.excludeIdSap;
   const items = new Map<string, { totalMinutes: number; totalTarget: number }>();
   for (const slice of slices) {
     if (!slice.included) continue;
+    if (excludeIdSap && slice.idSap === excludeIdSap) continue;
     const acc = items.get(slice.itemCode) ?? { totalMinutes: 0, totalTarget: 0 };
     acc.totalMinutes += slice.minutes;
     acc.totalTarget += slice.targetMinutes;
@@ -742,8 +746,9 @@ export function teamStatsByItem(
   }
   const result = new Map<string, { rendementPct: number }>();
   for (const [itemCode, acc] of items) {
+    if (acc.totalMinutes <= 0 || acc.totalTarget <= 0) continue;
     result.set(itemCode, {
-      rendementPct: acc.totalMinutes > 0 ? (acc.totalTarget / acc.totalMinutes) * 100 : 0,
+      rendementPct: (acc.totalTarget / acc.totalMinutes) * 100,
     });
   }
   return result;
