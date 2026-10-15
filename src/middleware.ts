@@ -8,7 +8,7 @@ const PUBLIC_PATHS = ["/login", "/auth/callback"];
 /** Page affichée aux utilisateurs connectés mais non approuvés */
 const PENDING_PATH = "/pending";
 
-/** Routes réservées aux admins (en plus du préfixe /admin) */
+/** Routes réservées aux admins (en plus du préfixe /admin) — correspondance exacte */
 const ADMIN_ONLY_PATHS = ["/kpi", "/kpi/mois", "/kpi/department", "/dashboard"];
 
 /** Routes réservées aux admins */
@@ -90,11 +90,9 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Routes admin-only hors préfixe /admin → ADMIN uniquement
+    // Routes admin-only hors préfixe /admin → ADMIN uniquement (correspondance exacte)
     if (profile && profile.role !== "ADMIN") {
-      const isAdminOnly = ADMIN_ONLY_PATHS.some(
-        (p) => pathname === p || pathname.startsWith(p + "/")
-      );
+      const isAdminOnly = ADMIN_ONLY_PATHS.includes(pathname);
       if (isAdminOnly) {
         const url = req.nextUrl.clone();
         url.pathname = "/capacity";
