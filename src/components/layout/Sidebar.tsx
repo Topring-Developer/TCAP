@@ -58,7 +58,6 @@ const NAV_SECTIONS: NavSection[] = [
       { kind: "item", href: "/kpi",            label: "Dashboard KPI",     adminOnly: true },
       { kind: "item", href: "/kpi/mois",       label: "Résumé du mois",    adminOnly: true },
       { kind: "item", href: "/kpi/warehouse",  label: "KPI Expédition" },
-      { kind: "item", href: "/kpi/picking",    label: "KPI Picking" },
       { kind: "item", href: "/kpi/production", label: "KPI Production" },
       { kind: "item", href: "/kpi/production/employees", label: "Prod par employé" },
       { kind: "item", href: "/kpi/inventory",  label: "KPI Inventaire" },
@@ -247,12 +246,16 @@ export function Sidebar({ role, userEmail }: { role: "ADMIN" | "CONSULTATION"; u
                       <Link
                         key={entry.href}
                         href={entry.href}
-                        className="flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-normal text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-all group"
+                        className={`flex items-center justify-between px-2.5 py-2 rounded-md text-sm font-normal hover:bg-zinc-800/70 transition-all group ${
+                          entry.adminOnly
+                            ? "text-primary hover:text-primary"
+                            : "text-zinc-300 hover:text-white"
+                        }`}
                       >
                         <span className="truncate">{entry.label}</span>
                         {entry.adminOnly && (
                           <ShieldCheck
-                            className="w-3 h-3 shrink-0 text-primary/50 group-hover:text-primary transition-colors ml-1"
+                            className="w-3 h-3 shrink-0 text-primary ml-1"
                             aria-label="Visible par les admins uniquement"
                           />
                         )}

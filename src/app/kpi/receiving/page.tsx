@@ -19,9 +19,11 @@ import {
 import {
   fetchSapDataSource,
   fetchSapKpiMonth,
-  last12MonthKeys,
-  monthsFrom,
 } from "@/lib/sap/source";
+import {
+  fetchTwmsImportedMonths,
+  twmsMonthsInLast12,
+} from "@/lib/twmsMonths";
 
 const MONTH_LABELS: Record<string, string> = {
   "01": "Janvier", "02": "Février", "03": "Mars", "04": "Avril",
@@ -59,24 +61,17 @@ export default function KpiReceivingPage() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const loadMeta = useCallback(async () => {
-    const source = await fetchSapDataSource();
-    const [{ data: monthRows }, { data: emps }] = await Promise.all([
-      source === "wrapper"
-        ? Promise.resolve({ data: last12MonthKeys().map((period_month) => ({ period_month })) })
-        : fetchAllRows<{ period_month: string }>((from, to) =>
-            supabase
-              .from("receiving_daily_counts")
-              .select("period_month")
-              .order("period_month", { ascending: false })
-              .range(from, to)
-          ),
+    const [twmsMonths, { data: emps }] = await Promise.all([
+      fetchTwmsImportedMonths(supabase),
       supabase
         .from("employees")
         .select("id, full_name, include_in_receiving_kpi"),
     ]);
 
-    const unique = [...new Set(monthRows.map((d) => d.period_month))];
-    setMonths(unique);
+    setMonths(twmsMonths);
+    setSelectedMonth((cur) =>
+      cur === LAST_12 || twmsMonths.includes(cur) ? cur : twmsMonths[0] ?? LAST_12
+    );
 
     const names = new Map<string, string>();
     const included = new Set<string>();
@@ -86,29 +81,38 @@ export default function KpiReceivingPage() {
     }
     setEmployeeNames(names);
     setIncludedIds(included);
-  }, [selectedMonth]);
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!selectedMonth) return;
     setLoading(true);
 
     const isLast12 = selectedMonth === LAST_12;
+    const twmsMonths =
+      months.length > 0 ? months : await fetchTwmsImportedMonths(supabase);
+    const last12Twms = twmsMonthsInLast12(twmsMonths);
 
     let monthStart: string;
     let monthEnd: string;
-    let cutoffMonth = "";
+    let monthList: string[];
     let periodFilter: (q: any) => any;
 
     if (isLast12) {
-      const now = new Date();
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-      cutoffMonth = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
-      monthStart = `${cutoffMonth}-01`;
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      monthEnd = `${curMonth}-${String(lastDay).padStart(2, "0")}`;
-      periodFilter = (q: any) => q.gte("period_month", cutoffMonth);
+      monthList = last12Twms;
+      if (monthList.length === 0) {
+        setSapRows([]);
+        setS8Logs([]);
+        setLoading(false);
+        return;
+      }
+      const oldest = [...monthList].sort()[0]!;
+      const newest = [...monthList].sort().reverse()[0]!;
+      const [ny, nm] = newest.split("-").map(Number);
+      monthStart = `${oldest}-01`;
+      monthEnd = `${newest}-${String(new Date(ny!, nm!, 0).getDate()).padStart(2, "0")}`;
+      periodFilter = (q: any) => q.in("period_month", monthList);
     } else {
+      monthList = [selectedMonth];
       monthStart = `${selectedMonth}-01`;
       const [y, m] = selectedMonth.split("-").map(Number);
       const lastDay = new Date(y!, m!, 0).getDate();
@@ -159,7 +163,6 @@ export default function KpiReceivingPage() {
     let s8Data: S8ReceivingLog[] = [];
 
     if (source === "wrapper") {
-      const monthList = isLast12 ? monthsFrom(cutoffMonth) : [selectedMonth];
       const [parts, s8Res] = await Promise.all([
         Promise.all(
           monthList.map(async (ym) => {
@@ -198,7 +201,7 @@ export default function KpiReceivingPage() {
     setSapRows(filteredSap);
     setS8Logs(filteredS8);
     setLoading(false);
-  }, [selectedMonth]);
+  }, [selectedMonth, months]);
 
   useEffect(() => {
     loadMeta().then(() => setLoading(false));

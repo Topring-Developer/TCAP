@@ -24,9 +24,12 @@ import { fetchPickingWaveStats, fetchPickingWaveStatsFrom } from "@/lib/warehous
 import {
   fetchSapDataSource,
   fetchSapKpiMonth,
-  last12MonthKeys,
-  monthsFrom,
 } from "@/lib/sap/source";
+import {
+  fetchTwmsImportedMonths,
+  twmsMonthsInLast12,
+  last12CalendarMonths,
+} from "@/lib/twmsMonths";
 
 const MONTH_LABELS: Record<string, string> = {
   "01": "Janvier", "02": "Février", "03": "Mars", "04": "Avril",
@@ -66,45 +69,48 @@ export default function KpiPickingPage() {
   const isLast12View = selectedMonth === LAST_12;
 
   const loadMeta = useCallback(async () => {
-    const source = await fetchSapDataSource();
-    const [{ data: monthRows }, { data: emps }] = await Promise.all([
-      source === "wrapper"
-        ? Promise.resolve({ data: last12MonthKeys().map((period_month) => ({ period_month })) })
-        : fetchAllRows<{ period_month: string }>((from, to) =>
-            supabase
-              .from("picking_daily_counts")
-              .select("period_month")
-              .order("period_month", { ascending: false })
-              .range(from, to)
-          ),
+    const [twmsMonths, { data: emps }] = await Promise.all([
+      fetchTwmsImportedMonths(supabase),
       supabase.from("employees").select("id, full_name"),
     ]);
-
-    const unique = [...new Set(monthRows.map((d) => d.period_month))];
-    setMonths(unique);
+    setMonths(twmsMonths);
     setEmployeeNames(new Map((emps ?? []).map((e) => [e.id, e.full_name])));
+    setSelectedMonth((cur) =>
+      cur === LAST_12 || twmsMonths.includes(cur) ? cur : twmsMonths[0] ?? LAST_12
+    );
   }, []);
 
   const loadData = useCallback(async () => {
     if (!selectedMonth) return;
     setLoading(true);
 
+    const twmsMonths =
+      months.length > 0 ? months : await fetchTwmsImportedMonths(supabase);
+    const last12Twms = twmsMonthsInLast12(twmsMonths);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let periodFilter: (q: any) => any;
     let monthStart: string;
     let monthEnd: string;
-    let cutoffMonth = "";
+    let monthList: string[];
 
     if (selectedMonth === LAST_12) {
-      const now = new Date();
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-      cutoffMonth = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
-      monthStart = `${cutoffMonth}-01`;
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      monthEnd = `${curMonth}-${String(lastDay).padStart(2, "0")}`;
-      periodFilter = (q: any) => q.gte("period_month", cutoffMonth);
+      monthList = last12Twms;
+      if (monthList.length === 0) {
+        setSapRows([]);
+        setWaveRows([]);
+        setS8Logs([]);
+        setLoading(false);
+        return;
+      }
+      const oldest = [...monthList].sort()[0]!;
+      const newest = [...monthList].sort().reverse()[0]!;
+      const [ny, nm] = newest.split("-").map(Number);
+      monthStart = `${oldest}-01`;
+      monthEnd = `${newest}-${String(new Date(ny!, nm!, 0).getDate()).padStart(2, "0")}`;
+      periodFilter = (q: any) => q.in("period_month", monthList);
     } else {
+      monthList = [selectedMonth];
       monthStart = `${selectedMonth}-01`;
       const [y, m] = selectedMonth.split("-").map(Number);
       const lastDay = new Date(y!, m!, 0).getDate();
@@ -135,10 +141,6 @@ export default function KpiPickingPage() {
         : Promise.resolve({ data: [] as S8PickingLog[], error: null });
 
     if (source === "wrapper") {
-      const monthList =
-        selectedMonth === LAST_12
-          ? monthsFrom(cutoffMonth)
-          : [selectedMonth];
       const [pickParts, s8Res] = await Promise.all([
         Promise.all(
           monthList.map(async (ym) => {
@@ -158,6 +160,11 @@ export default function KpiPickingPage() {
       return;
     }
 
+    const cutoffForWaves =
+      selectedMonth === LAST_12
+        ? (last12CalendarMonths().at(-1) ?? monthStart.slice(0, 7))
+        : selectedMonth;
+
     const [sapRes, s8Res, waves] = await Promise.all([
       fetchAllRows<PickingDailyRow>((from, to) =>
         periodFilter(
@@ -170,7 +177,9 @@ export default function KpiPickingPage() {
       ),
       s8Promise,
       selectedMonth === LAST_12
-        ? fetchPickingWaveStatsFrom(supabase, monthStart.slice(0, 7))
+        ? fetchPickingWaveStatsFrom(supabase, cutoffForWaves).then((all) =>
+            all.filter((w) => monthList.includes(w.period_month))
+          )
         : fetchPickingWaveStats(supabase, selectedMonth),
     ]);
 
@@ -178,7 +187,7 @@ export default function KpiPickingPage() {
     setWaveRows(waves);
     setS8Logs(s8Res.data.filter((l) => l.employee_id) as S8PickingLog[]);
     setLoading(false);
-  }, [selectedMonth]);
+  }, [selectedMonth, months]);
 
   useEffect(() => {
     loadMeta().then(() => setLoading(false));

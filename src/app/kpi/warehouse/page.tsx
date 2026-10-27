@@ -27,9 +27,11 @@ import { fetchWarehouseMonth, fetchPickingWaveStatsFrom } from "@/lib/warehouseD
 import {
   fetchSapDataSource,
   fetchSapKpiMonth,
-  last12MonthKeys,
-  monthsFrom,
 } from "@/lib/sap/source";
+import {
+  fetchTwmsImportedMonths,
+  twmsMonthsInLast12,
+} from "@/lib/twmsMonths";
 
 const MONTH_LABELS: Record<string, string> = {
   "01": "Janvier", "02": "Février", "03": "Mars", "04": "Avril",
@@ -78,24 +80,17 @@ export default function KpiWarehousePage() {
   const isLast12 = selectedMonth === LAST_12;
 
   const loadMeta = useCallback(async () => {
-    const source = await fetchSapDataSource();
-    const [{ data: pickMonths }, { data: packMonths }, { data: emps }] = await Promise.all([
-      source === "wrapper"
-        ? Promise.resolve({ data: last12MonthKeys().map((period_month) => ({ period_month })) })
-        : fetchAllRows<{ period_month: string }>((from, to) =>
-            supabase.from("picking_daily_counts").select("period_month").order("period_month", { ascending: false }).range(from, to)
-          ),
-      source === "wrapper"
-        ? Promise.resolve({ data: [] as { period_month: string }[] })
-        : fetchAllRows<{ period_month: string }>((from, to) =>
-            supabase.from("packaging_daily_counts").select("period_month").order("period_month", { ascending: false }).range(from, to)
-          ),
+    const [twmsMonths, { data: emps }] = await Promise.all([
+      fetchTwmsImportedMonths(supabase),
       supabase.from("employees").select("id, full_name"),
     ]);
-    const unique = [...new Set([...pickMonths, ...packMonths].map((d) => d.period_month))].sort().reverse();
-    setMonths(unique);
+    setMonths(twmsMonths);
     setEmployeeNames(new Map((emps ?? []).map((e) => [e.id, e.full_name])));
-    setSelectedMonth((cur) => (cur && (cur === LAST_12 || unique.includes(cur)) ? cur : unique[0] ?? ""));
+    setSelectedMonth((cur) =>
+      cur && (cur === LAST_12 || twmsMonths.includes(cur))
+        ? cur
+        : twmsMonths[0] ?? ""
+    );
   }, []);
 
   const loadData = useCallback(async () => {
@@ -109,13 +104,18 @@ export default function KpiWarehousePage() {
     setPreviousRolling(null);
 
     if (selectedMonth === LAST_12) {
-      const now = new Date();
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-      const cutoffMonth = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      const monthStart = `${cutoffMonth}-01`;
-      const monthEnd = `${curMonth}-${String(lastDay).padStart(2, "0")}`;
+      const twmsMonths =
+        months.length > 0 ? months : await fetchTwmsImportedMonths(supabase);
+      const monthList = twmsMonthsInLast12(twmsMonths);
+      if (monthList.length === 0) {
+        setLoading(false);
+        return;
+      }
+      const oldest = [...monthList].sort()[0]!;
+      const newest = [...monthList].sort().reverse()[0]!;
+      const [ny, nm] = newest.split("-").map(Number);
+      const monthStart = `${oldest}-01`;
+      const monthEnd = `${newest}-${String(new Date(ny!, nm!, 0).getDate()).padStart(2, "0")}`;
       const source = await fetchSapDataSource();
       const [{ data: pickTasks }, { data: expTasks }] = await Promise.all([
         supabase.from("task_mapping").select("id").eq("kpi_department", "Picking").eq("include_in_kpi", true),
@@ -137,7 +137,6 @@ export default function KpiWarehousePage() {
         : Promise.resolve({ data: [] as S8Log[], error: null });
 
       if (source === "wrapper") {
-        const monthList = monthsFrom(cutoffMonth);
         const [parts, pickS8, expS8] = await Promise.all([
           Promise.all(
             monthList.map(async (ym) => {
@@ -167,14 +166,16 @@ export default function KpiWarehousePage() {
         "id, employee_id, external_user_code, external_user_name, doc_date, period_month, line_count, wave_count, picklist_count";
       const [pickSap, packSap, pickS8, expS8, waves] = await Promise.all([
         fetchAllRows<PickingDailyRow>((from, to) =>
-          supabase.from("picking_daily_counts").select(sapCols).gte("period_month", cutoffMonth).range(from, to)
+          supabase.from("picking_daily_counts").select(sapCols).in("period_month", monthList).range(from, to)
         ),
         fetchAllRows<PackagingDailyRow>((from, to) =>
-          supabase.from("packaging_daily_counts").select(sapCols).gte("period_month", cutoffMonth).range(from, to)
+          supabase.from("packaging_daily_counts").select(sapCols).in("period_month", monthList).range(from, to)
         ),
         s8Pick,
         s8Exp,
-        fetchPickingWaveStatsFrom(supabase, cutoffMonth),
+        fetchPickingWaveStatsFrom(supabase, oldest).then((all) =>
+          all.filter((w) => monthList.includes(w.period_month))
+        ),
       ]);
       setPickRows(pickSap.data);
       setPackRows(packSap.data);

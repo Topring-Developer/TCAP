@@ -16,7 +16,7 @@ import {
 import { fetchAllRows } from "@/lib/supabase/fetchAll";
 import { computeProductionSummary, formatMinutes, formatPct } from "@/lib/production";
 import { fetchWarehouseMonth } from "@/lib/warehouseData";
-import { fetchSapDataSource, last12MonthKeys } from "@/lib/sap/source";
+import { fetchTwmsImportedMonths } from "@/lib/twmsMonths";
 
 const MONTH_LABELS: Record<string, string> = {
   "01": "Janvier", "02": "Février", "03": "Mars", "04": "Avril",
@@ -56,23 +56,10 @@ export default function KpiDashboardPage() {
   const [prodActual, setProdActual] = useState<number | null>(null);
 
   const loadMonths = useCallback(async () => {
-    const source = await fetchSapDataSource();
-    if (source === "wrapper") {
-      const unique = last12MonthKeys();
-      setMonths(unique);
-      setSelectedMonth((cur) => cur || unique[0] || "");
-      return;
-    }
-    const [{ data: pick }, { data: pack }] = await Promise.all([
-      supabase.from("picking_daily_counts").select("period_month").order("period_month", { ascending: false }).limit(24),
-      supabase.from("packaging_daily_counts").select("period_month").order("period_month", { ascending: false }).limit(24),
-    ]);
-    const unique = [...new Set([
-      ...(pick ?? []).map((r) => r.period_month),
-      ...(pack ?? []).map((r) => r.period_month),
-    ])].sort().reverse();
+    // Seulement les mois avec logs TWMS importés (registre d'import)
+    const unique = await fetchTwmsImportedMonths(supabase);
     setMonths(unique);
-    setSelectedMonth((cur) => cur || unique[0] || "");
+    setSelectedMonth((cur) => (cur && unique.includes(cur) ? cur : unique[0] || ""));
   }, []);
 
   const loadTrend = useCallback(async () => {
