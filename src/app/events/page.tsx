@@ -40,6 +40,7 @@ type Tab = "events" | "leaves";
 const EVENT_TYPE_ICONS: Record<CapacityEventType, React.ElementType> = {
   overtime:          TrendingUp,
   part_time_boost:   TrendingUp,
+  time_recovery:     TrendingUp,
   late:              Clock,
   early_departure:   Clock,
   planned_absence:   CalendarOff,
@@ -49,6 +50,7 @@ const EVENT_TYPE_ICONS: Record<CapacityEventType, React.ElementType> = {
 const EVENT_TYPE_COLORS: Record<CapacityEventType, string> = {
   overtime:          "bg-blue-50 text-blue-700 border-blue-200",
   part_time_boost:   "bg-purple-50 text-purple-700 border-purple-200",
+  time_recovery:     "bg-emerald-50 text-emerald-700 border-emerald-200",
   late:              "bg-orange-50 text-orange-700 border-orange-200",
   early_departure:   "bg-orange-50 text-orange-700 border-orange-200",
   planned_absence:   "bg-slate-100 text-slate-600 border-slate-200",
@@ -87,8 +89,6 @@ type EventFormState = {
   end_time: string;
   notes: string;
 };
-
-const TIMING_TYPES = ["late", "early_departure"] as const;
 
 type LeaveFormState = {
   employee_id: string;
@@ -265,9 +265,8 @@ export default function EventsPage() {
 
   async function handleSaveEvent() {
     if (!eventForm.employee_id || !eventForm.event_type) return;
-    const isTiming = TIMING_TYPES.includes(eventForm.event_type as typeof TIMING_TYPES[number]);
     const isPositiveType = CAPACITY_EVENT_POSITIVE_TYPES.includes(eventForm.event_type);
-    const isBankAbsence = !isTiming && !isPositiveType;
+    const isBankAbsence = !isPositiveType;
     if (isBankAbsence && !eventForm.nethris_reason_id) return;
 
     setSavingEvent(true);
@@ -418,15 +417,12 @@ export default function EventsPage() {
               <optgroup label="Positifs">
                 <option value="overtime">Overtime</option>
                 <option value="part_time_boost">Plage temps partiel</option>
+                <option value="time_recovery">Reprise de temps</option>
               </optgroup>
               <optgroup label="Absences">
                 {NETHRIS_ABSENCE_REASONS.map((r) => (
                   <option key={r.id} value={`reason:${r.id}`}>{r.supervisor_label}</option>
                 ))}
-              </optgroup>
-              <optgroup label="Timing">
-                <option value="late">Retard</option>
-                <option value="early_departure">Départ hâtif</option>
               </optgroup>
             </select>
 
@@ -663,7 +659,7 @@ export default function EventsPage() {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" /> Positifs
                 </p>
-                {(["overtime", "part_time_boost"] as const).map((t) => (
+                {(["overtime", "part_time_boost", "time_recovery"] as const).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -702,26 +698,6 @@ export default function EventsPage() {
                     )}
                   >
                     {r.supervisor_label}
-                  </button>
-                ))}
-                {TIMING_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setEventForm((p) => ({
-                      ...p,
-                      event_type: t,
-                      nethris_reason_id: null,
-                      fullDay: false,
-                    }))}
-                    className={cn(
-                      "w-full text-left px-3 py-2 rounded-lg border-2 text-sm transition-colors",
-                      eventForm.event_type === t && !eventForm.nethris_reason_id
-                        ? "border-red-400 bg-red-50 text-red-800"
-                        : "border-slate-200 text-slate-600 hover:border-slate-300"
-                    )}
-                  >
-                    {CAPACITY_EVENT_LABELS[t]}
                   </button>
                 ))}
               </div>
@@ -810,7 +786,6 @@ export default function EventsPage() {
                 !eventForm.end_date ||
                 (
                   !CAPACITY_EVENT_POSITIVE_TYPES.includes(eventForm.event_type as CapacityEventType) &&
-                  !TIMING_TYPES.includes(eventForm.event_type as typeof TIMING_TYPES[number]) &&
                   !eventForm.nethris_reason_id
                 )
               }

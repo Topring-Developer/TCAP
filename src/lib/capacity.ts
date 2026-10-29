@@ -102,12 +102,13 @@ export function isEmployeeOnLeaveThisWeek(
 // ─── Motifs d'absence (banques Nethris → mots superviseur) ───────────────────
 
 export const NETHRIS_ABSENCE_REASONS: NethrisAbsenceReason[] = [
-  { id: "flex",       supervisor_label: "Heure Flex",                              nethris_label: "Banque congés flex",              event_type: "unplanned_absence", sort_order: 1, active: true },
-  { id: "unpaid",     supervisor_label: "Absence non payée",                       nethris_label: null,                              event_type: "unplanned_absence", sort_order: 2, active: true },
-  { id: "vacation",   supervisor_label: "Vacances",                                nethris_label: "Banque de vacances",              event_type: "planned_absence",   sort_order: 3, active: true },
-  { id: "bank_reg",   supervisor_label: "Banque de temps (taux régulier)",         nethris_label: "Payer B.Temps 1,0 (taux reg)",    event_type: "planned_absence",   sort_order: 4, active: true },
-  { id: "bank_ot",    supervisor_label: "Banque de temps (temps supplémentaire)",  nethris_label: "Payer B.Temps 1,5 (taux supp)",   event_type: "planned_absence",   sort_order: 5, active: true },
-  { id: "initiative", supervisor_label: "Banque initiative",                       nethris_label: "Payer B. Initiative (reg. 1.0)",  event_type: "planned_absence",   sort_order: 6, active: true },
+  { id: "flex",          supervisor_label: "Heure Flex",                              nethris_label: "Banque congés flex",              event_type: "unplanned_absence", sort_order: 1, active: true },
+  { id: "unpaid",        supervisor_label: "Absence non payée",                       nethris_label: null,                              event_type: "unplanned_absence", sort_order: 2, active: true },
+  { id: "vacation",      supervisor_label: "Vacances",                                nethris_label: "Banque de vacances",              event_type: "planned_absence",   sort_order: 3, active: true },
+  { id: "bank_reg",      supervisor_label: "Banque de temps (taux régulier)",         nethris_label: "Payer B.Temps 1,0 (taux reg)",    event_type: "planned_absence",   sort_order: 4, active: true },
+  { id: "bank_ot",       supervisor_label: "Banque de temps (temps supplémentaire)",  nethris_label: "Payer B.Temps 1,5 (taux supp)",   event_type: "planned_absence",   sort_order: 5, active: true },
+  { id: "initiative",    supervisor_label: "Banque initiative",                       nethris_label: "Payer B. Initiative (reg. 1.0)",  event_type: "planned_absence",   sort_order: 6, active: true },
+  { id: "with_recovery", supervisor_label: "Absence avec reprise de temps",           nethris_label: null,                              event_type: "planned_absence",   sort_order: 7, active: true },
 ];
 
 export const NETHRIS_ABSENCE_REASON_LABELS: Record<NethrisAbsenceReasonId, string> =
@@ -125,6 +126,7 @@ export function getNethrisReason(id: NethrisAbsenceReasonId | null | undefined):
 export const EVENT_TYPE_LABELS: Record<CapacityEventType, string> = {
   overtime:          "Overtime",
   part_time_boost:   "Plage temps partiel",
+  time_recovery:     "Reprise de temps",
   late:              "Retard",
   early_departure:   "Départ hâtif",
   planned_absence:   "Absence planifiée",
@@ -307,7 +309,7 @@ export function computeDayCapacity(
     timingLossHours += differenceInMinutes(evEnd, evStart) / 60;
   }
 
-  // 5. Heures positives (overtime + part_time_boost — durée brute dans la journée)
+  // 5. Heures positives (overtime + plage TP + reprise — durée brute dans la journée)
   let positiveEventHours = 0;
   const positiveEvents = dayEvents.filter((ev) =>
     CAPACITY_EVENT_POSITIVE_TYPES.includes(ev.event_type)

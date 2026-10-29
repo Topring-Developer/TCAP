@@ -750,8 +750,9 @@ function AttendanceCell({
 
   // Présent / overtime
   const hasPositiveEvents = cap.positiveEventHours > 0;
-  const isOTRecovery = cap.events.some((e) => e.event_type === "part_time_boost");
-  const otLabel = isOTRecovery ? "récup." : "OT";
+  const hasRecovery = cap.events.some((e) => e.event_type === "time_recovery");
+  const hasPlage = cap.events.some((e) => e.event_type === "part_time_boost");
+  const otLabel = hasRecovery ? "récup." : hasPlage ? "plage" : "OT";
 
   return (
     <div className="relative group/ot-wrap min-h-[56px]">
@@ -842,8 +843,6 @@ type EventForm = {
   repeatWeekdays: number[];
 };
 
-const TIMING_TYPES = ["late", "early_departure"] as const;
-
 function CapacityEventModal({
   employee,
   dateStr,
@@ -910,8 +909,7 @@ function CapacityEventModal({
 
   const isEditing = !!existingEvent;
   const isOvertime = CAPACITY_EVENT_POSITIVE_TYPES.includes(form.event_type as CapacityEventType);
-  const isTiming = TIMING_TYPES.includes(form.event_type as typeof TIMING_TYPES[number]);
-  const isBankAbsence = !isOvertime && !isTiming;
+  const isBankAbsence = !isOvertime;
 
   const weekdayDates = weekDays.slice(0, 5).map((d, i) => ({
     weekday: i + 1,
@@ -1024,7 +1022,7 @@ function CapacityEventModal({
       (isOvertime ? selectedSlots.length > 0 : form.repeatWeekdays.length > 0))
   );
 
-  const OVERTIME_TYPES = ["overtime", "part_time_boost"] as const;
+  const POSITIVE_TYPES = ["overtime", "part_time_boost", "time_recovery"] as const;
 
   return (
     <Modal
@@ -1051,7 +1049,7 @@ function CapacityEventModal({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Positifs (+)</p>
-              {OVERTIME_TYPES.map((t) => (
+              {POSITIVE_TYPES.map((t) => (
                 <button key={t} type="button"
                   onClick={() => setForm((p) => ({ ...p, event_type: t, nethris_reason_id: null, fullDay: false }))}
                   className={cn(
@@ -1077,21 +1075,6 @@ function CapacityEventModal({
                     form.nethris_reason_id === r.id ? "border-red-400 bg-red-50 text-red-800" : "border-slate-200 text-slate-600 hover:border-slate-300"
                   )}>
                   {r.supervisor_label}
-                </button>
-              ))}
-              {TIMING_TYPES.map((t) => (
-                <button key={t} type="button"
-                  onClick={() => setForm((p) => ({
-                    ...p,
-                    event_type: t,
-                    nethris_reason_id: null,
-                    fullDay: false,
-                  }))}
-                  className={cn(
-                    "w-full text-left px-3 py-2 rounded-lg border-2 text-sm transition-colors",
-                    form.event_type === t && !form.nethris_reason_id ? "border-red-400 bg-red-50 text-red-800" : "border-slate-200 text-slate-600 hover:border-slate-300"
-                  )}>
-                  {CAPACITY_EVENT_LABELS[t]}
                 </button>
               ))}
             </div>

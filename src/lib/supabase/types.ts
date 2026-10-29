@@ -93,12 +93,12 @@ export type EmployeeWorkScheduleUpdate = Partial<EmployeeWorkScheduleInsert>;
 // ─── Événements de capacité (table unifiée) ───────────────────────────────────
 
 /** Types positifs : ajoutent des heures disponibles */
-export type PositiveEventType = "overtime" | "part_time_boost";
+export type PositiveEventType = "overtime" | "part_time_boost" | "time_recovery";
 
 /** Types négatifs intersectés avec l'horaire (journée ou portion) */
 export type AbsenceEventType = "planned_absence" | "unplanned_absence";
 
-/** Types négatifs durée brute (retards/départs) */
+/** Types négatifs durée brute (retards/départs) — legacy, plus proposés à la création */
 export type TimingEventType = "late" | "early_departure";
 
 export type CapacityEventType = PositiveEventType | AbsenceEventType | TimingEventType;
@@ -106,13 +106,14 @@ export type CapacityEventType = PositiveEventType | AbsenceEventType | TimingEve
 export const CAPACITY_EVENT_LABELS: Record<CapacityEventType, string> = {
   overtime:           "Overtime",
   part_time_boost:    "Plage temps partiel",
+  time_recovery:      "Reprise de temps",
   late:               "Retard",
   early_departure:    "Départ hâtif",
   planned_absence:    "Absence planifiée",
   unplanned_absence:  "Absence imprévue",
 };
 
-export const CAPACITY_EVENT_POSITIVE_TYPES: CapacityEventType[] = ["overtime", "part_time_boost"];
+export const CAPACITY_EVENT_POSITIVE_TYPES: CapacityEventType[] = ["overtime", "part_time_boost", "time_recovery"];
 export const CAPACITY_EVENT_ABSENCE_TYPES: CapacityEventType[]  = ["planned_absence", "unplanned_absence"];
 export const CAPACITY_EVENT_TIMING_TYPES: CapacityEventType[]   = ["late", "early_departure"];
 export const CAPACITY_EVENT_NEGATIVE_TYPES: CapacityEventType[] = [...CAPACITY_EVENT_ABSENCE_TYPES, ...CAPACITY_EVENT_TIMING_TYPES];
@@ -124,7 +125,8 @@ export type NethrisAbsenceReasonId =
   | "vacation"
   | "bank_reg"
   | "bank_ot"
-  | "initiative";
+  | "initiative"
+  | "with_recovery";
 
 export interface NethrisAbsenceReason {
   id: NethrisAbsenceReasonId;
